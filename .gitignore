@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Models (too large for git)
+models/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/demo_executed.ipynb
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
