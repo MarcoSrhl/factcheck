@@ -1,0 +1,296 @@
+[
+  {
+    "claim": "Roosevelt Island Operating Corporation is headquartered in Bobby Byrd",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Arthur Eichengr\u00fcn is from Derek Huggins",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Tulum (song) is a Installation art work",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Santiago de Compostela serves as the capital of First Republic of Korea",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Thomas Dale founded Durgapur",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "J\u00f8rgen Isnes was born in Tao Lin",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Marco Rafal\u00e0 is a Liga Unike",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "David Sampson (politician) is from Peter Elkus",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Hannah Arterian was born in Literary nonsense",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Arthur Greenfield died in Amanda Fix  PersonFunction  1",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Googoosh founded Soul (publication)",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Vin Abrenica was written by Brian Katcher",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Bella Akhmadulina and Principality of Montenegro are married",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Anish Shah (businessman) attended Llantrisant",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "National Sea Rescue Institute has its headquarters in Kirundi",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Conditions (magazine) was founded by Sports video game",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Elmo Jayawardena works as a Akira Hokuto",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Fabiola Trejo is a Barboursville, West Virginia",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Diocese of Nsukka  Nsukka  1 is in Chuukese language",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Ian Allan Publishing was founded by Matt Fraction",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Annabella (magazine) was founded by Angelo Rizzoli",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Anosiarivo Manapa is located in Madagascar",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Village Creek (Texas) flows through United States",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Oran is the capital of Western Beylik",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Jay Leyda and Si-Lan Chen are married",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Amman is the capital of Emirate of Transjordan",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Maragheh serves as the capital of Ilkhanate",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Atod developed Jeremy McGrath Supercross 98",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Valentine (M\u00e5neskin song) belongs to the Rock music genre",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "London is the birthplace of Joe Edwards (football manager)",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Dungeons 4 belongs to the Simulation video game genre",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Irving Louis Horowitz founded Transaction Publishers",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Dazzling (novel) was written by Chikodili Emelumadu",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Moto Racer 2 was developed by Delphine Software International",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "The official language of Socialist Federal Republic of Yugoslavia is Serbian Cyrillic alphabet",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Sonora Reyes is from Arizona",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Mexico City is the birthplace of Jorge Su\u00e1rez (pianist)",
+    "expected": "SUPPORTED",
+    "predicted": "SUPPORTED",
+    "correct": true
+  },
+  {
+    "claim": "Ki\u00ean H\u1ea3i district is located in Vietnam",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Charles Bukowski wrote Women (Bukowski novel)",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Wang Lili (basketball) has China nationality",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "There is a connection between Butch Felker and Republic of Galicia",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  },
+  {
+    "claim": "Richard J. Margolis has nationality Paul Robeson",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  },
+  {
+    "claim": "Douglas Residential Historic District has occupation B\u00e9la II of Hungary",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Blueprint (magazine) is in Krimml",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  },
+  {
+    "claim": "Harold Douglas Briggs has nationality Keiichi Hasegawa",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "There is a connection between Scott Wu and Stanley Spooner",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  },
+  {
+    "claim": "Wilhelm Blos studied at Claibourne Smith  PersonFunction  1",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  },
+  {
+    "claim": "There is a connection between Barricade Books and The Appearance of Christ Before the People",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  },
+  {
+    "claim": "There is a connection between Jim Kierstead and Maharlika Pilipinas Basketball League",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": true
+  }
+]
