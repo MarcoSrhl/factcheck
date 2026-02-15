@@ -176,6 +176,70 @@ class KnowledgeQuery:
         objects = subject_data.get(predicate_uri, [])
         return [obj.get("value", "") for obj in objects]
 
+    # --- Entity property extraction ---
+
+    # Key predicates to fetch for evidence (ontology + property)
+    _KEY_PREDICATES = [
+        "http://dbpedia.org/ontology/birthPlace",
+        "http://dbpedia.org/ontology/deathPlace",
+        "http://dbpedia.org/ontology/country",
+        "http://dbpedia.org/ontology/capital",
+        "http://dbpedia.org/ontology/location",
+        "http://dbpedia.org/ontology/nationality",
+        "http://dbpedia.org/ontology/knownFor",
+        "http://dbpedia.org/ontology/occupation",
+        "http://dbpedia.org/ontology/genre",
+        "http://dbpedia.org/ontology/largestCity",
+        "http://dbpedia.org/ontology/officialLanguage",
+        "http://dbpedia.org/ontology/continent",
+        "http://dbpedia.org/property/birthPlace",
+        "http://dbpedia.org/property/capital",
+        "http://dbpedia.org/property/location",
+        "http://dbpedia.org/property/country",
+        "http://www.w3.org/2000/01/rdf-schema#comment",
+    ]
+
+    def get_entity_properties(self, entity_uri: str) -> dict[str, list[str]]:
+        """Fetch key properties of an entity for evidence building.
+
+        Uses the JSON API (faster than SPARQL) to retrieve entity data,
+        then filters for key predicates.
+        Returns a dict mapping human-readable property names to their values.
+        """
+        if not entity_uri:
+            return {}
+
+        # Use JSON API for speed (avoids SPARQL timeouts)
+        data = self.json_get_entity_data(entity_uri)
+        subject_data = data.get(entity_uri, {})
+
+        if not subject_data:
+            return {}
+
+        # Build a set of key predicate URIs for fast lookup
+        key_pred_set = set(self._KEY_PREDICATES)
+
+        properties: dict[str, list[str]] = {}
+        for pred_uri, objects in subject_data.items():
+            if pred_uri not in key_pred_set:
+                continue
+
+            pred_name = pred_uri.split("/")[-1].split("#")[-1]
+            readable_values = []
+            for obj in objects[:3]:
+                value = obj.get("value", "")
+                if not value:
+                    continue
+                if value.startswith("http://dbpedia.org/resource/"):
+                    readable_values.append(value.split("/")[-1].replace("_", " "))
+                elif len(value) < 200:
+                    readable_values.append(value)
+
+            if readable_values:
+                properties[pred_name] = readable_values
+
+        return properties
+
     # --- High-level verification ---
 
     def verify_triplet(

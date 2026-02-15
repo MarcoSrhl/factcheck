@@ -237,7 +237,11 @@ class FactChecker:
             return None
 
     def _build_evidence_text(self, kb_results: list[dict], entity_uris: dict) -> str:
-        """Build evidence text from KB results for the neural model."""
+        """Build evidence text from KB results for the neural model.
+
+        When no direct relation is found, fetches the subject's key properties
+        from DBpedia to provide contradicting or supporting evidence.
+        """
         parts = []
         for kr in kb_results:
             if kr["found"]:
@@ -247,8 +251,80 @@ class FactChecker:
                 pred_names = [p.split("/")[-1] for p in preds]
                 parts.append(f"{subj} is related to {obj} via {', '.join(pred_names)}")
             else:
-                parts.append(f"No relation found between {kr['triplet'][0]} and {kr['triplet'][2]}")
+                subj = kr["triplet"][0]
+                obj = kr["triplet"][2]
+                subj_uri = kr.get("subject_uri")
+
+                # Fetch subject properties for richer evidence
+                if subj_uri:
+                    props = self.kb.get_entity_properties(subj_uri)
+                    if props:
+                        # Format as natural sentences matching training data format
+                        prop_parts = []
+                        for prop_name, values in list(props.items())[:5]:
+                            val_str = ", ".join(values[:2])
+                            prop_parts.append(f"{subj} {prop_name} is {val_str}")
+                        parts.append(". ".join(prop_parts))
+                    else:
+                        parts.append(f"No relation found between {subj} and {obj}")
+                else:
+                    parts.append(f"No relation found between {subj} and {obj}")
         return ". ".join(parts) if parts else ""
+
+    # Mapping from claim predicates to DBpedia property names for contradiction detection
+    _PREDICATE_TO_PROPERTY = {
+        "born in": "birthPlace",
+        "was born in": "birthPlace",
+        "born": "birthPlace",
+        "capital": "capital",
+        "located in": "location",
+        "is located in": "location",
+        "country": "country",
+        "be": "country",  # for "X is the capital of Y" patterns
+    }
+
+    def _check_property_contradiction(
+        self, kb_results: list[dict]
+    ) -> bool | None:
+        """Check if subject properties contradict the claimed object.
+
+        Returns True if a contradiction is found, False if properties support
+        the claim, None if no relevant properties available.
+        """
+        for kr in kb_results:
+            if kr["found"]:
+                continue  # Direct relation found, no need to check
+            subj_uri = kr.get("subject_uri")
+            obj_uri = kr.get("object_uri")
+            if not subj_uri:
+                continue
+
+            triplet = kr["triplet"]
+            predicate = triplet[1]
+            obj_text = triplet[2].lower()
+
+            # Get the subject's properties
+            props = self.kb.get_entity_properties(subj_uri)
+            if not props:
+                continue
+
+            # Check if any property values match or contradict the claimed object
+            for prop_name, values in props.items():
+                for value in values:
+                    value_lower = value.lower()
+                    # If the property value contains the claimed object → no contradiction
+                    if obj_text in value_lower or value_lower in obj_text:
+                        return False
+                    # If the object URI name is in the value → no contradiction
+                    if obj_uri:
+                        obj_name = obj_uri.split("/")[-1].replace("_", " ").lower()
+                        if obj_name in value_lower or value_lower in obj_name:
+                            return False
+
+            # We have properties but none match the claimed object → contradiction
+            return True
+
+        return None
 
     def _combine_verdicts(
         self,
@@ -270,13 +346,25 @@ class FactChecker:
         kb_found = any(kr["found"] for kr in kb_results) if kb_results else False
         kb_all_found = all(kr["found"] for kr in kb_results) if kb_results else False
 
+        # Check if both subject and object have URIs (entities were linked)
+        both_entities_linked = all(
+            kr.get("subject_uri") and kr.get("object_uri")
+            for kr in kb_results
+        ) if kb_results else False
+
+        # Check for property contradiction when KB finds no direct relation
+        contradiction = None
+        if not kb_found and both_entities_linked:
+            contradiction = self._check_property_contradiction(kb_results)
+
         # --- Compute a GAN confidence modifier ---------------------------
-        # gan_modifier in [-0.1, +0.1]: positive if GAN thinks "real",
-        # negative if GAN thinks "fake".  Zero when GAN is not available.
         gan_modifier: float = 0.0
         if gan_score is not None:
-            # Map score from [0, 1] to [-0.1, 0.1]
             gan_modifier = (gan_score - 0.5) * 0.2
+
+        # Property contradiction overrides neural prediction
+        if contradiction is True and not kb_found:
+            return "REFUTED", min(0.99, max(0.1, 0.75 - gan_modifier))
 
         if neural_prediction:
             neural_label = neural_prediction["label"]
@@ -302,8 +390,13 @@ class FactChecker:
                 base = 0.5
                 return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
 
-            # If KB finds nothing and neural says SUPPORTED -> trust neural with lower confidence
+            # If KB finds nothing and neural says SUPPORTED
             if not kb_found and neural_label == "SUPPORTED":
+                # If we have properties but no contradiction → support from properties
+                if contradiction is False:
+                    base = min(0.95, (neural_conf + 1.0) / 2)
+                    return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
+                # Otherwise lower confidence
                 base = neural_conf * 0.6
                 return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
 
