@@ -120,7 +120,12 @@ def train(
     val_split: float = 0.2,
 ):
     """Train the BERT fact classifier."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     print(f"Training on: {device}")
 
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -130,14 +135,22 @@ def train(
     model.to(device)
 
     data = load_data(data_path)
+    print(f"Loaded {len(data)} training examples")
     dataset = FactCheckDataset(data, tokenizer)
 
     val_size = int(len(dataset) * val_split)
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size)
+    num_workers = min(8, os.cpu_count() or 1)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True,
+        num_workers=num_workers, pin_memory=True, persistent_workers=True,
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=batch_size,
+        num_workers=num_workers, pin_memory=True, persistent_workers=True,
+    )
 
     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
     total_steps = len(train_loader) * epochs
