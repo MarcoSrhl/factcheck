@@ -1,7 +1,10 @@
 """Main fact-checking pipeline orchestrating all components."""
 
+from __future__ import annotations
+
 import logging
 import os
+from typing import Optional
 
 from src.triplet_extractor import TripletExtractor
 from src.entity_linker import EntityLinker
@@ -11,6 +14,8 @@ from src.model import FactClassifier, LABEL_MAP
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL_PATH = "models/fact_checker"
+DEFAULT_GAN_PATH = "models/gan"
+DEFAULT_EXPLAINER_PATH = "models/explainer"
 
 
 class FactChecker:
@@ -21,16 +26,27 @@ class FactChecker:
     2. Link entities to DBpedia
     3. Query DBpedia for evidence
     4. Use neural classifier for verdict
-    5. Combine KB evidence + neural prediction for final verdict
+    5. (Optional) Run the GAN discriminator on triplet embeddings
+    6. Combine KB evidence + neural prediction + GAN score for final verdict
+    7. (Optional) Generate an explanation for the verdict
     """
 
-    def __init__(self, model_path: str | None = None, use_neural: bool = True):
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        use_neural: bool = True,
+        use_gan: bool = False,
+        gan_path: Optional[str] = None,
+        use_explainer: bool = False,
+        explainer_model_path: Optional[str] = None,
+    ) -> None:
         self.extractor = TripletExtractor()
         self.linker = EntityLinker()
         self.kb = KnowledgeQuery()
 
+        # ----- Neural classifier ------------------------------------------
         self.use_neural = use_neural
-        self.classifier = None
+        self.classifier: Optional[FactClassifier] = None
         if use_neural:
             path = model_path or DEFAULT_MODEL_PATH
             if os.path.exists(path):
@@ -42,6 +58,72 @@ class FactChecker:
                 )
                 self.classifier = FactClassifier()
 
+        # ----- GAN discriminator ------------------------------------------
+        self.use_gan = use_gan
+        self.gan = None
+        if use_gan:
+            self.gan = self._load_gan(gan_path)
+
+        # ----- Explainer --------------------------------------------------
+        self.use_explainer = use_explainer
+        self.explainer = None
+        if use_explainer:
+            self.explainer = self._load_explainer(explainer_model_path)
+
+    # ----- Explainer loading helper ---------------------------------------
+
+    @staticmethod
+    def _load_explainer(
+        explainer_model_path: Optional[str] = None,
+    ) -> Optional["FactExplainer"]:
+        """Try to load the FactExplainer.  Returns ``None`` on failure."""
+        from src.explainer import FactExplainer
+
+        path = explainer_model_path or DEFAULT_EXPLAINER_PATH
+        try:
+            explainer = FactExplainer(
+                use_t5=True,
+                t5_model_path=path,
+                use_attention=True,
+            )
+            logger.info("Loaded FactExplainer with T5 from %s", path)
+            return explainer
+        except Exception as exc:
+            logger.warning(
+                "Could not load FactExplainer: %s. Explanations will be unavailable.",
+                exc,
+            )
+            return None
+
+    # ----- GAN loading helper --------------------------------------------
+
+    @staticmethod
+    def _load_gan(
+        gan_path: Optional[str] = None,
+    ) -> Optional["FactGAN"]:
+        """Try to load a trained FactGAN.  Returns ``None`` on failure."""
+        from src.gan_model import FactGAN
+
+        path = gan_path or DEFAULT_GAN_PATH
+        gan = FactGAN()
+        if os.path.isdir(path):
+            try:
+                gan.load(path)
+                logger.info("Loaded FactGAN from %s", path)
+            except Exception as exc:
+                logger.warning(
+                    "Could not load GAN weights from %s: %s. "
+                    "Using untrained GAN.",
+                    path,
+                    exc,
+                )
+        else:
+            logger.warning(
+                "GAN directory %s does not exist. Using untrained GAN.",
+                path,
+            )
+        return gan
+
     def check(self, claim: str) -> dict:
         """Run the full fact-checking pipeline on a claim.
 
@@ -51,17 +133,21 @@ class FactChecker:
           - entities: linked DBpedia URIs
           - kb_evidence: knowledge base verification results
           - neural_prediction: neural model prediction (if enabled)
+          - gan_score: GAN discriminator score (if enabled, float 0-1)
           - verdict: final verdict (SUPPORTED / REFUTED / NOT ENOUGH INFO)
           - confidence: confidence score
+          - explanation: multi-layered explanation dict (if explainer enabled)
         """
-        result = {
+        result: dict = {
             "claim": claim,
             "triplets": [],
             "entities": {},
             "kb_evidence": [],
             "neural_prediction": None,
+            "gan_score": None,
             "verdict": "NOT ENOUGH INFO",
             "confidence": 0.0,
+            "explanation": None,
         }
 
         # Step 1: Extract triplets
@@ -70,7 +156,7 @@ class FactChecker:
         logger.info(f"Extracted {len(triplets)} triplet(s) from: {claim}")
 
         # Step 2: Entity linking
-        entity_uris = {}
+        entity_uris: dict[str, str] = {}
         for subject, _, obj in triplets:
             if subject not in entity_uris:
                 uri = self.linker.link(subject)
@@ -83,7 +169,7 @@ class FactChecker:
         result["entities"] = entity_uris
 
         # Step 3: Query knowledge base
-        kb_results = []
+        kb_results: list[dict] = []
         for subject, predicate, obj in triplets:
             subj_uri = entity_uris.get(subject)
             obj_uri = entity_uris.get(obj)
@@ -102,12 +188,53 @@ class FactChecker:
             neural_result = self.classifier.predict(claim, evidence_text)
             result["neural_prediction"] = neural_result
 
-        # Step 5: Final verdict
-        verdict, confidence = self._combine_verdicts(kb_results, result.get("neural_prediction"))
+        # Step 5: GAN discriminator scoring
+        gan_score = self._run_gan_discriminator(triplets)
+        result["gan_score"] = gan_score
+
+        # Step 6: Final verdict
+        verdict, confidence = self._combine_verdicts(
+            kb_results,
+            result.get("neural_prediction"),
+            gan_score=gan_score,
+        )
         result["verdict"] = verdict
         result["confidence"] = confidence
 
+        # Step 7: Generate explanation (if enabled)
+        if self.use_explainer and self.explainer is not None:
+            try:
+                explanation = self.explainer.explain(
+                    fact_check_result=result,
+                    classifier=self.classifier,
+                )
+                result["explanation"] = explanation
+            except Exception as exc:
+                logger.warning("Explainer failed: %s", exc)
+
         return result
+
+    # ----- GAN helper ----------------------------------------------------
+
+    def _run_gan_discriminator(
+        self, triplets: list[tuple[str, str, str]]
+    ) -> Optional[float]:
+        """Score the claim's triplets through the GAN discriminator.
+
+        Returns the *average* discriminator score across all triplets,
+        or ``None`` if the GAN is disabled or no triplets were extracted.
+        """
+        if not self.use_gan or self.gan is None or not triplets:
+            return None
+
+        try:
+            scores = self.gan.discriminate_triplets(triplets)  # (n, 1)
+            avg_score: float = scores.mean().item()
+            logger.info("GAN discriminator avg score: %.4f", avg_score)
+            return avg_score
+        except Exception as exc:
+            logger.warning("GAN discriminator failed: %s", exc)
+            return None
 
     def _build_evidence_text(self, kb_results: list[dict], entity_uris: dict) -> str:
         """Build evidence text from KB results for the neural model."""
@@ -126,11 +253,30 @@ class FactChecker:
     def _combine_verdicts(
         self,
         kb_results: list[dict],
-        neural_prediction: dict | None,
+        neural_prediction: Optional[dict] = None,
+        gan_score: Optional[float] = None,
     ) -> tuple[str, float]:
-        """Combine KB evidence and neural prediction into a final verdict."""
+        """Combine KB evidence, neural prediction, and GAN score into a final verdict.
+
+        The GAN discriminator score (``gan_score``) acts as *additional
+        evidence*.  A high score (closer to 1.0) indicates the triplet
+        looks like a real DBpedia fact, nudging confidence upward.  A low
+        score (closer to 0.0) suggests the triplet looks fabricated,
+        which can reduce confidence or tip the verdict toward REFUTED.
+
+        The GAN adjustment is intentionally moderate so that KB evidence
+        and the neural classifier remain the primary signals.
+        """
         kb_found = any(kr["found"] for kr in kb_results) if kb_results else False
         kb_all_found = all(kr["found"] for kr in kb_results) if kb_results else False
+
+        # --- Compute a GAN confidence modifier ---------------------------
+        # gan_modifier in [-0.1, +0.1]: positive if GAN thinks "real",
+        # negative if GAN thinks "fake".  Zero when GAN is not available.
+        gan_modifier: float = 0.0
+        if gan_score is not None:
+            # Map score from [0, 1] to [-0.1, 0.1]
+            gan_modifier = (gan_score - 0.5) * 0.2
 
         if neural_prediction:
             neural_label = neural_prediction["label"]
@@ -138,34 +284,39 @@ class FactChecker:
 
             # If KB confirms relation exists and neural says SUPPORTED -> high confidence SUPPORTED
             if kb_all_found and neural_label == "SUPPORTED":
-                return "SUPPORTED", min(0.95, (neural_conf + 1.0) / 2)
+                base = min(0.95, (neural_conf + 1.0) / 2)
+                return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
 
             # If KB confirms relation exists but neural says REFUTED -> trust neural with lower confidence
             if kb_found and neural_label == "REFUTED":
-                return "REFUTED", neural_conf * 0.7
+                base = neural_conf * 0.7
+                return "REFUTED", min(0.99, max(0.1, base - gan_modifier))
 
             # If KB finds nothing and neural says REFUTED -> REFUTED
             if not kb_found and neural_label == "REFUTED":
-                return "REFUTED", neural_conf
+                base = neural_conf
+                return "REFUTED", min(0.99, max(0.1, base - gan_modifier))
 
             # If KB finds something and neural says NOT ENOUGH INFO -> lean SUPPORTED
             if kb_found and neural_label == "NOT ENOUGH INFO":
-                return "SUPPORTED", 0.5
+                base = 0.5
+                return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
 
             # If KB finds nothing and neural says SUPPORTED -> trust neural with lower confidence
             if not kb_found and neural_label == "SUPPORTED":
-                return "SUPPORTED", neural_conf * 0.6
+                base = neural_conf * 0.6
+                return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
 
             # Otherwise, trust neural prediction
-            return neural_label, neural_conf
+            return neural_label, min(0.99, max(0.1, neural_conf + gan_modifier))
 
-        # No neural model: rely on KB only
+        # No neural model: rely on KB (+ optional GAN boost)
         if kb_all_found:
-            return "SUPPORTED", 0.7
+            return "SUPPORTED", min(0.99, max(0.1, 0.7 + gan_modifier))
         elif kb_found:
-            return "SUPPORTED", 0.5
+            return "SUPPORTED", min(0.99, max(0.1, 0.5 + gan_modifier))
         else:
-            return "NOT ENOUGH INFO", 0.3
+            return "NOT ENOUGH INFO", min(0.99, max(0.1, 0.3 + gan_modifier))
 
     def check_batch(self, claims: list[str]) -> list[dict]:
         """Check multiple claims."""
@@ -195,15 +346,47 @@ def format_result(result: dict) -> str:
                 for p in ev["predicates"][:3]:
                     lines.append(f"    via {p}")
     if result["neural_prediction"]:
-        np = result["neural_prediction"]
-        lines.append(f"Neural: {np['label']} ({np['confidence']:.3f})")
+        np_pred = result["neural_prediction"]
+        lines.append(f"Neural: {np_pred['label']} ({np_pred['confidence']:.3f})")
+    if result.get("gan_score") is not None:
+        lines.append(f"GAN Discriminator Score: {result['gan_score']:.4f}")
+    if result.get("explanation"):
+        explanation = result["explanation"]
+        nl = explanation.get("natural_explanation")
+        if nl:
+            lines.append(f"Explanation: {nl}")
+        breakdown = explanation.get("confidence_breakdown")
+        if breakdown and breakdown.get("formatted"):
+            lines.append(breakdown["formatted"])
     return "\n".join(lines)
 
 
 if __name__ == "__main__":
+    import argparse as _argparse
+
     logging.basicConfig(level=logging.INFO)
 
-    checker = FactChecker()
+    _parser = _argparse.ArgumentParser(description="Run the fact-checking pipeline.")
+    _parser.add_argument(
+        "--gan", action="store_true", help="Enable GAN discriminator scoring."
+    )
+    _parser.add_argument(
+        "--gan-path", type=str, default=None, help="Path to trained GAN model."
+    )
+    _parser.add_argument(
+        "--explain", action="store_true", help="Enable explainability module."
+    )
+    _parser.add_argument(
+        "--explainer-path", type=str, default=None, help="Path to trained explainer model."
+    )
+    _args = _parser.parse_args()
+
+    checker = FactChecker(
+        use_gan=_args.gan,
+        gan_path=_args.gan_path,
+        use_explainer=_args.explain,
+        explainer_model_path=_args.explainer_path,
+    )
 
     claims = [
         "Paris is the capital of France",
