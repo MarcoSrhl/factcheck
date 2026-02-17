@@ -105,11 +105,26 @@ class FactChecker:
         from src.gan_model import FactGAN
 
         path = gan_path or DEFAULT_GAN_PATH
-        gan = FactGAN()
+        try:
+            gan = FactGAN()
+        except Exception as exc:
+            logger.warning(
+                "Could not initialise FactGAN: %s. GAN disabled.", exc
+            )
+            return None
+
         if os.path.isdir(path):
             try:
                 gan.load(path)
                 logger.info("Loaded FactGAN from %s", path)
+            except (ValueError, RuntimeError) as exc:
+                logger.warning(
+                    "Could not load GAN weights from %s: %s. "
+                    "Old MLP checkpoint may be incompatible with BERT architecture. "
+                    "Using untrained GAN.",
+                    path,
+                    exc,
+                )
             except Exception as exc:
                 logger.warning(
                     "Could not load GAN weights from %s: %s. "
