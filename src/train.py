@@ -13,8 +13,10 @@ from transformers import (
 from torch.optim import AdamW
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from tqdm import tqdm
+from typing import Optional
 
 from src.model import LABEL_TO_ID, LABEL_MAP, NUM_LABELS
+from src.database import NeonDB
 
 
 class FactCheckDataset(Dataset):
@@ -119,8 +121,19 @@ def train(
     batch_size: int = 8,
     learning_rate: float = 2e-5,
     val_split: float = 0.2,
+    save_to_db: bool = False,
 ):
-    """Train the BERT fact classifier."""
+    """Train the BERT fact classifier.
+    
+    Args:
+        data_path: Path to training data JSON file
+        output_dir: Directory to save the trained model
+        epochs: Number of training epochs
+        batch_size: Training batch size
+        learning_rate: Learning rate for optimizer
+        val_split: Validation split ratio
+        save_to_db: If True, saves training data and metadata to Neon database
+    """
     if torch.backends.mps.is_available():
         device = torch.device("mps")
     elif torch.cuda.is_available():
@@ -137,6 +150,38 @@ def train(
 
     data = load_data(data_path)
     print(f"Loaded {len(data)} training examples")
+    
+    # Database tracking (optional)
+    db_run_id = None
+    if save_to_db:
+        try:
+            db = NeonDB()
+            db.initialize_schema()
+            
+            # Create training run entry
+            db_run_id = db.create_training_run(
+                model_name="bert-base-uncased",
+                dataset_name=data_path or "synthetic_data",
+                num_examples=len(data),
+                hyperparameters={
+                    "epochs": epochs,
+                    "batch_size": batch_size,
+                    "learning_rate": learning_rate,
+                    "val_split": val_split,
+                }
+            )
+            print(f"Created database run_id: {db_run_id}")
+            
+            # Save training data to database
+            print("Saving training data to database...")
+            db.save_training_data(db_run_id, data)
+            print(f"Saved {len(data)} training examples to database")
+            
+        except Exception as e:
+            print(f"Warning: Database saving failed: {e}")
+            print("Continuing training without database tracking...")
+            db_run_id = None
+    
     dataset = FactCheckDataset(data, tokenizer)
 
     val_size = int(len(dataset) * val_split)
@@ -223,6 +268,23 @@ def train(
 
     print(f"\nTraining complete. Best validation accuracy: {best_val_acc:.4f}")
     print(f"Model saved to: {output_dir}")
+    
+    # Update database with final metrics
+    if save_to_db and db_run_id:
+        try:
+            db.update_training_run(
+                run_id=db_run_id,
+                status="completed",
+                final_metrics={
+                    "best_val_accuracy": best_val_acc,
+                    "final_train_loss": avg_train_loss,
+                },
+                model_path=output_dir
+            )
+            print(f"Updated database run_id {db_run_id} with final metrics")
+        except Exception as e:
+            print(f"Warning: Failed to update database: {e}")
+    
     return output_dir
 
 
@@ -233,6 +295,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
     parser.add_argument("--lr", type=float, default=2e-5, help="Learning rate")
+    parser.add_argument("--save-to-db", action="store_true", help="Save training data to Neon database")
     args = parser.parse_args()
 
     train(
@@ -241,4 +304,5 @@ if __name__ == "__main__":
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,
+        save_to_db=args.save_to_db,
     )
