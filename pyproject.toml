@@ -42,9 +42,7 @@ database = [
 Homepage = "https://github.com/MarcoSrhl/factcheck"
 Repository = "https://github.com/MarcoSrhl/factcheck"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["factcheck*"]
-
-[tool.setuptools.package-dir]
-factcheck = "src"
+[tool.setuptools]
+packages = ["factcheck"]
+package-dir = {"factcheck" = "src"}
+package-data = {"factcheck" = ["*.py"]}
