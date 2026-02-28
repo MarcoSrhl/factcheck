@@ -1036,7 +1036,7 @@ if __name__ == "__main__":
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-    from src.fact_checker import FactChecker, format_result
+    from factcheck.fact_checker import FactChecker, format_result
 
     print("Initialising FactChecker pipeline...")
     checker = FactChecker(use_neural=True, use_gan=False)

@@ -6,10 +6,10 @@ import logging
 import os
 from typing import Optional
 
-from src.triplet_extractor import TripletExtractor
-from src.entity_linker import EntityLinker
-from src.knowledge_query import KnowledgeQuery
-from src.model import FactClassifier, LABEL_MAP
+from factcheck.triplet_extractor import TripletExtractor
+from factcheck.entity_linker import EntityLinker
+from factcheck.knowledge_query import KnowledgeQuery
+from factcheck.model import FactClassifier, LABEL_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class FactChecker:
         explainer_model_path: Optional[str] = None,
     ) -> Optional["FactExplainer"]:
         """Try to load the FactExplainer.  Returns ``None`` on failure."""
-        from src.explainer import FactExplainer
+        from factcheck.explainer import FactExplainer
 
         path = explainer_model_path or DEFAULT_EXPLAINER_PATH
         try:
@@ -102,7 +102,7 @@ class FactChecker:
         gan_path: Optional[str] = None,
     ) -> Optional["FactGAN"]:
         """Try to load a trained FactGAN.  Returns ``None`` on failure."""
-        from src.gan_model import FactGAN
+        from factcheck.gan_model import FactGAN
 
         path = gan_path or DEFAULT_GAN_PATH
         try:

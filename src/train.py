@@ -15,8 +15,8 @@ from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from tqdm import tqdm
 from typing import Optional
 
-from src.model import LABEL_TO_ID, LABEL_MAP, NUM_LABELS
-from src.database import NeonDB
+from factcheck.model import LABEL_TO_ID, LABEL_MAP, NUM_LABELS
+from factcheck.database import NeonDB
 
 
 class FactCheckDataset(Dataset):

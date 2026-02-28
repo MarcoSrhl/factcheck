@@ -35,8 +35,8 @@ from typing import Optional
 
 import torch
 
-from src.gan_model import FactGAN
-from src.sparql_queries import fetch_mixed_triplets
+from factcheck.gan_model import FactGAN
+from factcheck.sparql_queries import fetch_mixed_triplets
 
 logger = logging.getLogger(__name__)
 

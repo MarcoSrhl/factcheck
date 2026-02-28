@@ -16,7 +16,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from src.sparql_queries import (
+from factcheck.sparql_queries import (
     QUERY_REGISTRY,
     fetch_mixed_triplets,
     _uri_to_label,
