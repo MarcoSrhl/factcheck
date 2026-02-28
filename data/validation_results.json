@@ -1,296 +1,296 @@
 [
   {
-    "claim": "Roosevelt Island Operating Corporation is headquartered in Bobby Byrd",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Arthur Eichengr\u00fcn is from Derek Huggins",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Tulum (song) is a Installation art work",
-    "expected": "REFUTED",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": false
-  },
-  {
-    "claim": "Santiago de Compostela serves as the capital of First Republic of Korea",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Thomas Dale founded Durgapur",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "J\u00f8rgen Isnes was born in Tao Lin",
-    "expected": "REFUTED",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": false
-  },
-  {
-    "claim": "Marco Rafal\u00e0 is a Liga Unike",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "David Sampson (politician) is from Peter Elkus",
-    "expected": "REFUTED",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": false
-  },
-  {
-    "claim": "Hannah Arterian was born in Literary nonsense",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Arthur Greenfield died in Amanda Fix  PersonFunction  1",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Googoosh founded Soul (publication)",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Vin Abrenica was written by Brian Katcher",
-    "expected": "REFUTED",
-    "predicted": "SUPPORTED",
-    "correct": false
-  },
-  {
-    "claim": "Bella Akhmadulina and Principality of Montenegro are married",
-    "expected": "REFUTED",
-    "predicted": "SUPPORTED",
-    "correct": false
-  },
-  {
-    "claim": "Anish Shah (businessman) attended Llantrisant",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "National Sea Rescue Institute has its headquarters in Kirundi",
-    "expected": "REFUTED",
-    "predicted": "SUPPORTED",
-    "correct": false
-  },
-  {
-    "claim": "Conditions (magazine) was founded by Sports video game",
-    "expected": "REFUTED",
-    "predicted": "SUPPORTED",
-    "correct": false
-  },
-  {
-    "claim": "Elmo Jayawardena works as a Akira Hokuto",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Fabiola Trejo is a Barboursville, West Virginia",
-    "expected": "REFUTED",
-    "predicted": "REFUTED",
-    "correct": true
-  },
-  {
-    "claim": "Diocese of Nsukka  Nsukka  1 is in Chuukese language",
-    "expected": "REFUTED",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": false
-  },
-  {
-    "claim": "Ian Allan Publishing was founded by Matt Fraction",
-    "expected": "REFUTED",
-    "predicted": "SUPPORTED",
-    "correct": false
-  },
-  {
-    "claim": "Annabella (magazine) was founded by Angelo Rizzoli",
+    "claim": "Barbara Blackmun won the National Endowment for the Humanities",
     "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
+    "predicted": "REFUTED",
+    "correct": false
   },
   {
-    "claim": "Anosiarivo Manapa is located in Madagascar",
+    "claim": "Trieste serves as the capital of Free Territory of Trieste",
     "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
+    "predicted": "REFUTED",
+    "correct": false
   },
   {
-    "claim": "Village Creek (Texas) flows through United States",
+    "claim": "Henry O'Donnell (British Army officer) won the Order of St Michael and St George",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Hallie Todd is married to Glenn Withrow",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Joy Asonye is from Nigeria",
+    "expected": "SUPPORTED",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Gun (Chinese mythology) is married to N\u00fczhi",
     "expected": "SUPPORTED",
     "predicted": "NOT ENOUGH INFO",
     "correct": false
   },
   {
-    "claim": "Oran is the capital of Western Beylik",
+    "claim": "Krishna Bahadur Rai (Nepali politician) has Nepal nationality",
     "expected": "SUPPORTED",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "Jay Leyda and Si-Lan Chen are married",
-    "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
-  },
-  {
-    "claim": "Amman is the capital of Emirate of Transjordan",
+    "claim": "Stoke Newington is the birthplace of Dayo Koleosho",
     "expected": "SUPPORTED",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "Maragheh serves as the capital of Ilkhanate",
+    "claim": "Julie Freeman (artist) received the Nesta (charity)",
+    "expected": "SUPPORTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Gabrielle Selz won the California Book Awards",
     "expected": "SUPPORTED",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "Atod developed Jeremy McGrath Supercross 98",
+    "claim": "Ann Liang was born in Beijing",
     "expected": "SUPPORTED",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "Valentine (M\u00e5neskin song) belongs to the Rock music genre",
+    "claim": "Universiti Malaya was founded in 1905",
     "expected": "SUPPORTED",
     "predicted": "NOT ENOUGH INFO",
     "correct": false
   },
   {
-    "claim": "London is the birthplace of Joe Edwards (football manager)",
+    "claim": "Al-Baha Domestic Airport can be found in Al Aqiq",
     "expected": "SUPPORTED",
     "predicted": "NOT ENOUGH INFO",
     "correct": false
   },
   {
-    "claim": "Dungeons 4 belongs to the Simulation video game genre",
+    "claim": "Nymphia Wind is famous for RuPaul's Drag Race",
     "expected": "SUPPORTED",
     "predicted": "NOT ENOUGH INFO",
     "correct": false
   },
   {
-    "claim": "Irving Louis Horowitz founded Transaction Publishers",
-    "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
-  },
-  {
-    "claim": "Dazzling (novel) was written by Chikodili Emelumadu",
-    "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
-  },
-  {
-    "claim": "Moto Racer 2 was developed by Delphine Software International",
-    "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
-  },
-  {
-    "claim": "The official language of Socialist Federal Republic of Yugoslavia is Serbian Cyrillic alphabet",
-    "expected": "SUPPORTED",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": false
-  },
-  {
-    "claim": "Sonora Reyes is from Arizona",
-    "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
-  },
-  {
-    "claim": "Mexico City is the birthplace of Jorge Su\u00e1rez (pianist)",
-    "expected": "SUPPORTED",
-    "predicted": "SUPPORTED",
-    "correct": true
-  },
-  {
-    "claim": "Ki\u00ean H\u1ea3i district is located in Vietnam",
-    "expected": "SUPPORTED",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": false
-  },
-  {
-    "claim": "Charles Bukowski wrote Women (Bukowski novel)",
+    "claim": "Queensland National Party has its headquarters in South Brisbane, Queensland",
     "expected": "SUPPORTED",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "Wang Lili (basketball) has China nationality",
+    "claim": "Hongkong Electric Company was established in 1890",
     "expected": "SUPPORTED",
     "predicted": "NOT ENOUGH INFO",
     "correct": false
   },
   {
-    "claim": "There is a connection between Butch Felker and Republic of Galicia",
-    "expected": "NOT ENOUGH INFO",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": true
-  },
-  {
-    "claim": "Richard J. Margolis has nationality Paul Robeson",
-    "expected": "NOT ENOUGH INFO",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": true
-  },
-  {
-    "claim": "Douglas Residential Historic District has occupation B\u00e9la II of Hungary",
+    "claim": "There is a connection between Beno Eckmann and Florence, Colorado",
     "expected": "NOT ENOUGH INFO",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "Blueprint (magazine) is in Krimml",
-    "expected": "NOT ENOUGH INFO",
-    "predicted": "NOT ENOUGH INFO",
-    "correct": true
-  },
-  {
-    "claim": "Harold Douglas Briggs has nationality Keiichi Hasegawa",
+    "claim": "Julia Huxley is known for Leonard Huxley (writer)",
     "expected": "NOT ENOUGH INFO",
     "predicted": "REFUTED",
     "correct": false
   },
   {
-    "claim": "There is a connection between Scott Wu and Stanley Spooner",
+    "claim": "There is a connection between Badm\u00e9nil-aux-Bois and Boro language (India)",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Glaumb\u00e6r has Thorfinn Karlsefni nationality",
     "expected": "NOT ENOUGH INFO",
     "predicted": "NOT ENOUGH INFO",
     "correct": true
   },
   {
-    "claim": "Wilhelm Blos studied at Claibourne Smith  PersonFunction  1",
+    "claim": "Ginger Canzoneri serves as the capital of Ginger Canzoneri  PersonFunction  1",
     "expected": "NOT ENOUGH INFO",
     "predicted": "NOT ENOUGH INFO",
     "correct": true
   },
   {
-    "claim": "There is a connection between Barricade Books and The Appearance of Christ Before the People",
+    "claim": "The official language of Ernest Malenga is Ur\u00e2nia",
     "expected": "NOT ENOUGH INFO",
     "predicted": "NOT ENOUGH INFO",
     "correct": true
   },
   {
-    "claim": "There is a connection between Jim Kierstead and Maharlika Pilipinas Basketball League",
+    "claim": "There is a connection between Christian Science Publishing Society and Union Labor Party (California)",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "There is a connection between Ariana Afghan Airlines and Wait Until Spring, Bandini",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "There is a connection between Alec Douglas-Home and E. T. Barnette",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Huntington, West Virginia is from Against Method",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "There is a connection between EGSA Oran and Blowing Rock, North Carolina",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Harvest Moon: Save the Homeland has its headquarters in Victor Interactive Software",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Libya works as a Italian language in Slovenia",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Tbilisi received the Reichskommissariat Kaukasien",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Disney Mirrorverse is the author of Nathaniel Parker Willis",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "There is a connection between Saliya Pieris and Charles Ofria",
     "expected": "NOT ENOUGH INFO",
     "predicted": "NOT ENOUGH INFO",
     "correct": true
+  },
+  {
+    "claim": "There is a connection between Divya Sripada and J. Jayalalithaa",
+    "expected": "NOT ENOUGH INFO",
+    "predicted": "REFUTED",
+    "correct": false
+  },
+  {
+    "claim": "Drew Gooden (basketball) won the Big 12 Conference men's basketball",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
+  },
+  {
+    "claim": "Yudha Saputera received the Conspicuous Service Cross (Australia)",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "A. M. Fontana died in Pocopson Township, Pennsylvania",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Benjamin Patterson Inn is in Florence, Alabama",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Ottoman Empire speaks Khoekhoe language",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "WingNut Films was established in 1995",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Daddy Bruce Randolph is a August Schilling  PersonFunction  1",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "The Notebook (TV series) belongs to the Soundtrack genre",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Ernesta Bittanti Battisti is married to Marcos Palmeira",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Temi Popoola attended University of Kentucky",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "The official language of South Sudan is Garifuna language",
+    "expected": "REFUTED",
+    "predicted": "NOT ENOUGH INFO",
+    "correct": false
+  },
+  {
+    "claim": "Mexico City is the birthplace of Carrie Rheingans",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "The capital of Bahri Mamluks is Warsaw",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Herbert Clifton died in Paramaribo",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Amelia De La Rama is married to J\u00falia Lemmertz",
+    "expected": "REFUTED",
+    "predicted": "REFUTED",
+    "correct": true
+  },
+  {
+    "claim": "Dhaka is where I. M. E. Blandin died",
+    "expected": "REFUTED",
+    "predicted": "SUPPORTED",
+    "correct": false
   }
 ]

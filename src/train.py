@@ -12,6 +12,7 @@ from transformers import (
 )
 from torch.optim import AdamW
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from tqdm import tqdm
 
 from src.model import LABEL_TO_ID, LABEL_MAP, NUM_LABELS
 
@@ -163,7 +164,8 @@ def train(
         # Training
         model.train()
         total_loss = 0
-        for batch in train_loader:
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", unit="batch")
+        for batch in pbar:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             token_type_ids = batch["token_type_ids"].to(device)
@@ -179,6 +181,7 @@ def train(
             scheduler.step()
 
             total_loss += loss.item()
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         avg_train_loss = total_loss / len(train_loader)
 
@@ -204,10 +207,11 @@ def train(
         )
 
         print(
-            f"Epoch {epoch+1}/{epochs} | "
+            f"  Epoch {epoch+1}/{epochs} | "
             f"Loss: {avg_train_loss:.4f} | "
             f"Val Acc: {acc:.4f} | "
-            f"P: {precision:.4f} R: {recall:.4f} F1: {f1:.4f}"
+            f"P: {precision:.4f} R: {recall:.4f} F1: {f1:.4f}",
+            flush=True,
         )
 
         if acc > best_val_acc:
