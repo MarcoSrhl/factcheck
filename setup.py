@@ -13,7 +13,8 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/MarcoSrhl/factcheck",
-    packages=find_packages(),
+    packages=["factcheck"],
+    package_dir={"factcheck": "src"},
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",

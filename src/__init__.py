@@ -8,11 +8,11 @@ Main components:
 - KnowledgeQuery: Query DBpedia knowledge base
 """
 
-from src.fact_checker import FactChecker
-from src.model import FactClassifier, LABEL_MAP, LABEL_TO_ID, NUM_LABELS
-from src.triplet_extractor import TripletExtractor
-from src.entity_linker import EntityLinker
-from src.knowledge_query import KnowledgeQuery
+from factcheck.fact_checker import FactChecker
+from factcheck.model import FactClassifier, LABEL_MAP, LABEL_TO_ID, NUM_LABELS
+from factcheck.triplet_extractor import TripletExtractor
+from factcheck.entity_linker import EntityLinker
+from factcheck.knowledge_query import KnowledgeQuery
 
 __version__ = "0.1.0"
 
