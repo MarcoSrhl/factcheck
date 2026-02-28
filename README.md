@@ -1,6 +1,6 @@
 # Automated Fact-Checking System
 
-An automated fact-checking pipeline that determines whether English claims are **SUPPORTED**, **REFUTED**, or if there is **NOT ENOUGH INFO**, using DBpedia as a knowledge base, BERT as a neural classifier, a BERT-based GAN for triplet plausibility scoring, and T5 for natural language explanations.
+An automated fact-checking pipeline that determines whether English claims are **SUPPORTED**, **REFUTED**, or if there is **NOT ENOUGH INFO**, using DBpedia as a knowledge base, BERT as the primary neural classifier, and T5 for natural language explanations. An optional BERT-based GAN provides triplet plausibility scoring.
 
 ## Architecture
 
@@ -31,8 +31,8 @@ Input Claim
             ▼
 ┌──────────────────────────┐
 │ 4. Evidence Building      │  Formats KB relations as natural
-│    KB facts → text        │  language; fetches entity properties
-│                           │  for contradiction detection
+│    KB facts → text        │  language matching training templates
+│                           │  (e.g. "DBpedia confirms X via Y")
 └───────────┬──────────────┘
             │
             ▼
@@ -50,9 +50,9 @@ Input Claim
             │
             ▼
 ┌──────────────────────────┐
-│ 7. Verdict Combination    │  Combines KB evidence, neural
-│    + Explainability       │  prediction, GAN score & property
-│                           │  contradiction detection
+│ 7. Verdict Combination    │  Neural classifier is primary signal;
+│    + Explainability       │  KB evidence adjusts confidence
+│                           │  (agreement ↑ / disagreement ↓)
 │    SUPPORTED / REFUTED /  │
 │    NOT ENOUGH INFO        │  Optional: T5 explanation, KB
 │                           │  reasoning chain, attention analysis
@@ -100,7 +100,7 @@ fact-checker/
 │   ├── fact_checker/             #   BERT classifier
 │   ├── explainer/                #   T5 explanation generator
 │   └── gan/                      #   BERT-based GAN
-├── data/                         # Datasets (45K+ examples)
+├── data/                         # Datasets (55K+ examples)
 ├── requirements.txt
 └── README.md
 ```
@@ -144,7 +144,7 @@ print(format_result(result))
 ### Train the Models
 
 ```bash
-# Generate training data from DBpedia (45K+ examples)
+# Generate training data from DBpedia (55K+ examples)
 python -m src.generate_training_data --per-category 1000 --workers 8
 
 # Split into train/validation
@@ -165,6 +165,9 @@ python -m src.gan_trainer --epochs 50 --batch-size 16 --output models/gan
 ```bash
 # End-to-end validation on held-out data
 python -m src.validate_pipeline
+
+# Quick regression benchmark (20 curated claims)
+python -m src.validate_pipeline --benchmark
 ```
 
 ### Run Tests
@@ -220,7 +223,7 @@ Methods:
 ### 4. Neural Classifier (`src/model.py`)
 
 BERT-based (`bert-base-uncased`) 3-class sequence classifier:
-- Input: `"{claim} [SEP] {evidence}"` (max 256 tokens)
+- Input: Proper BERT sentence-pair encoding `(claim, evidence)` with `token_type_ids` (max 256 tokens)
 - Output: predicted label + softmax confidence
 - Labels: SUPPORTED, REFUTED, NOT ENOUGH INFO
 - Supports CPU, CUDA, and MPS (Apple Silicon)
@@ -246,11 +249,10 @@ Four complementary explanation strategies:
 
 ### 7. Verdict Combination (`src/fact_checker.py`)
 
-Combines signals from all components with priority-based logic:
-- **Property contradiction detection**: Maps claim predicates to DBpedia properties and checks for conflicts (e.g., "born in England" vs. KB birthPlace = Corsica → REFUTED)
-- KB evidence + neural prediction agreement → high confidence
-- KB evidence + neural disagreement → trust neural with lower confidence
-- GAN discriminator score applies a moderate adjustment (±0.1)
+The neural classifier is the primary signal; KB evidence adjusts confidence but never overrides the neural label:
+- KB agrees with neural prediction → confidence boosted (×1.1–1.2)
+- KB disagrees with neural prediction → confidence reduced (×0.7–0.8)
+- No neural model available → falls back to KB-only heuristic
 - All confidences clamped to [0.1, 0.99]
 
 ## Training Data
@@ -263,15 +265,15 @@ Training data is automatically generated from DBpedia using 20 SPARQL categories
 
 Generation process:
 1. Parallel SPARQL queries fetch up to 1000 triplets per category
-2. **SUPPORTED**: Real triplets formatted via natural language templates (2-3 per predicate)
-3. **REFUTED**: Entity swapping — replaces the object with a random different entity
-4. **NOT ENOUGH INFO**: Random unrelated entity pairs (50% probability)
+2. **SUPPORTED**: Real triplets formatted via natural language templates (2-3 per predicate); 30% use inference-style evidence (`"DBpedia confirms X via dbo:pred"`)
+3. **REFUTED**: Same-type entity swapping (harder negatives from the same predicate pool); 50% use property-based evidence format
+4. **NOT ENOUGH INFO**: Random unrelated entity pairs (80% probability) + cross-predicate NEI examples (valid entities, wrong relation)
 
 | Dataset | Examples | Description |
 |---------|----------|-------------|
-| `bert_training_data.json` | 45,841 | Full BERT training data (SUPPORTED: 18,339 / REFUTED: 18,339 / NEI: 9,163) |
-| `train.json` | 36,675 | 80% stratified train split |
-| `validation.json` | 9,166 | 20% stratified validation split |
+| `bert_training_data.json` | 55,736 | Full BERT training data (SUPPORTED: 18,339 / REFUTED: 18,339 / NEI: 19,058) |
+| `train.json` | 44,591 | 80% stratified train split |
+| `validation.json` | 11,145 | 20% stratified validation split |
 | `t5_training_data.json` | 5,000 | T5 explainer training data |
 
 ## Local GraphDB Setup (Optional)
@@ -299,6 +301,8 @@ Configure via environment variables: `GRAPHDB_HOST`, `GRAPHDB_PORT`, `GRAPHDB_RE
 |--------|-------|
 | **Accuracy** | **53.06%** |
 
+> **Note:** These results were obtained before the latest changes (proper sentence-pair encoding, simplified verdict logic, improved evidence alignment). Re-run `python -m src.validate_pipeline` and `python -m src.validate_pipeline --benchmark` to get updated numbers.
+
 Confusion matrix:
 
 | | Predicted SUPPORTED | Predicted REFUTED | Predicted NEI |
@@ -308,9 +312,9 @@ Confusion matrix:
 | **Actual NEI** | 0 | 2 | 7 |
 
 Key observations:
-- Best performance on **REFUTED** claims (55% recall) thanks to property-based contradiction detection
+- Best performance on **REFUTED** claims (55% recall)
 - **NOT ENOUGH INFO** correctly identified when no KB evidence is found
-- Main error source: SUPPORTED claims misclassified as NEI when DBpedia lacks the relevant relation, causing the pipeline to fall back on the neural classifier without evidence
+- Main error source: SUPPORTED claims misclassified as NEI when DBpedia lacks the relevant relation
 
 ### Limitations
 
