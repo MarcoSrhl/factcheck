@@ -142,11 +142,82 @@ def validate(
     return acc
 
 
+BENCHMARK_CLAIMS = [
+    # SUPPORTED (10)
+    {"claim": "Paris is the capital of France", "label": "SUPPORTED"},
+    {"claim": "Barack Obama was born in Hawaii", "label": "SUPPORTED"},
+    {"claim": "Tokyo is the capital of Japan", "label": "SUPPORTED"},
+    {"claim": "Albert Einstein was born in Ulm", "label": "SUPPORTED"},
+    {"claim": "William Shakespeare wrote Hamlet", "label": "SUPPORTED"},
+    {"claim": "The Eiffel Tower is located in Paris", "label": "SUPPORTED"},
+    {"claim": "Marie Curie was born in Warsaw", "label": "SUPPORTED"},
+    {"claim": "London is the capital of the United Kingdom", "label": "SUPPORTED"},
+    {"claim": "Leonardo da Vinci was a painter", "label": "SUPPORTED"},
+    {"claim": "Berlin is the capital of Germany", "label": "SUPPORTED"},
+    # REFUTED (5)
+    {"claim": "Paris is the capital of Germany", "label": "REFUTED"},
+    {"claim": "Napoleon was born in England", "label": "REFUTED"},
+    {"claim": "Tokyo is the capital of China", "label": "REFUTED"},
+    {"claim": "Shakespeare was born in France", "label": "REFUTED"},
+    {"claim": "The Eiffel Tower is located in London", "label": "REFUTED"},
+    # NOT ENOUGH INFO (5)
+    {"claim": "There is life on other planets", "label": "NOT ENOUGH INFO"},
+    {"claim": "Aliens have visited Earth", "label": "NOT ENOUGH INFO"},
+    {"claim": "Chocolate causes acne", "label": "NOT ENOUGH INFO"},
+    {"claim": "Dogs can sense earthquakes before they happen", "label": "NOT ENOUGH INFO"},
+    {"claim": "Coffee stunts growth", "label": "NOT ENOUGH INFO"},
+]
+
+
+def quick_benchmark(model_path: str = "models/fact_checker"):
+    """Run a quick regression benchmark on curated claims."""
+    print("=== Quick Benchmark (20 curated claims) ===\n")
+    checker = FactChecker(model_path=model_path, use_neural=True)
+
+    expected = []
+    predicted = []
+
+    for item in BENCHMARK_CLAIMS:
+        claim = item["claim"]
+        true_label = item["label"]
+
+        try:
+            result = checker.check(claim)
+            pred_label = result["verdict"]
+        except Exception as e:
+            pred_label = "NOT ENOUGH INFO"
+
+        match = "OK" if pred_label == true_label else "FAIL"
+        print(f"  [{match:4s}] {claim}")
+        if match == "FAIL":
+            print(f"         expected={true_label}, got={pred_label}")
+
+        expected.append(true_label)
+        predicted.append(pred_label)
+
+    acc = accuracy_score(expected, predicted)
+    print(f"\nBenchmark accuracy: {acc:.0%} ({sum(1 for e, p in zip(expected, predicted) if e == p)}/{len(expected)})")
+
+    labels = ["SUPPORTED", "REFUTED", "NOT ENOUGH INFO"]
+    for label in labels:
+        indices = [i for i, e in enumerate(expected) if e == label]
+        if not indices:
+            continue
+        correct = sum(1 for i in indices if predicted[i] == label)
+        print(f"  {label:18s}: {correct}/{len(indices)}")
+
+    return acc
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Validate fact-checking pipeline")
     parser.add_argument("--data", default="data/validation.json", help="Validation data path")
     parser.add_argument("--model", default="models/fact_checker", help="Model path")
     parser.add_argument("--sample", type=int, default=None, help="Sample size (None=all)")
+    parser.add_argument("--benchmark", action="store_true", help="Run quick benchmark only")
     args = parser.parse_args()
 
-    validate(val_path=args.data, model_path=args.model, sample_size=args.sample)
+    if args.benchmark:
+        quick_benchmark(model_path=args.model)
+    else:
+        validate(val_path=args.data, model_path=args.model, sample_size=args.sample)

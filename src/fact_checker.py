@@ -254,36 +254,44 @@ class FactChecker:
     def _build_evidence_text(self, kb_results: list[dict], entity_uris: dict) -> str:
         """Build evidence text from KB results for the neural model.
 
-        When no direct relation is found, fetches the subject's key properties
-        from DBpedia to provide contradicting or supporting evidence.
+        Formats evidence to match training data patterns so the neural model
+        can recognise them. Training uses formats like:
+          - "DBpedia confirms X is related to Y via dbo:pred"
+          - "No direct relation found between X and Y in DBpedia"
         """
         parts = []
         for kr in kb_results:
+            subj = kr["triplet"][0]
+            obj = kr["triplet"][2]
+
             if kr["found"]:
-                subj = kr["triplet"][0]
-                obj = kr["triplet"][2]
                 preds = kr["predicates"][:3]
                 pred_names = [p.split("/")[-1] for p in preds]
-                parts.append(f"{subj} is related to {obj} via {', '.join(pred_names)}")
+                dbo_preds = ", ".join(pred_names)
+                parts.append(
+                    f"DBpedia confirms {subj} is related to {obj} via {dbo_preds}"
+                )
             else:
-                subj = kr["triplet"][0]
-                obj = kr["triplet"][2]
                 subj_uri = kr.get("subject_uri")
-
-                # Fetch subject properties for richer evidence
                 if subj_uri:
                     props = self.kb.get_entity_properties(subj_uri)
                     if props:
-                        # Format as natural sentences matching training data format
                         prop_parts = []
-                        for prop_name, values in list(props.items())[:5]:
+                        for prop_name, values in list(props.items())[:3]:
                             val_str = ", ".join(values[:2])
                             prop_parts.append(f"{subj} {prop_name} is {val_str}")
-                        parts.append(". ".join(prop_parts))
+                        parts.append(
+                            f"No direct relation found between {subj} and {obj} in DBpedia. "
+                            + ". ".join(prop_parts)
+                        )
                     else:
-                        parts.append(f"No relation found between {subj} and {obj}")
+                        parts.append(
+                            f"No direct relation found between {subj} and {obj} in DBpedia"
+                        )
                 else:
-                    parts.append(f"No relation found between {subj} and {obj}")
+                    parts.append(
+                        f"No direct relation found between {subj} and {obj} in DBpedia"
+                    )
         return ". ".join(parts) if parts else ""
 
     # Mapping from claim predicates to DBpedia property names for contradiction detection
@@ -347,84 +355,37 @@ class FactChecker:
         neural_prediction: Optional[dict] = None,
         gan_score: Optional[float] = None,
     ) -> tuple[str, float]:
-        """Combine KB evidence, neural prediction, and GAN score into a final verdict.
+        """Combine KB evidence and neural prediction into a final verdict.
 
-        The GAN discriminator score (``gan_score``) acts as *additional
-        evidence*.  A high score (closer to 1.0) indicates the triplet
-        looks like a real DBpedia fact, nudging confidence upward.  A low
-        score (closer to 0.0) suggests the triplet looks fabricated,
-        which can reduce confidence or tip the verdict toward REFUTED.
-
-        The GAN adjustment is intentionally moderate so that KB evidence
-        and the neural classifier remain the primary signals.
+        Strategy: the neural classifier is the primary signal. KB evidence
+        adjusts confidence up (agreement) or down (disagreement) but never
+        overrides the neural label.
         """
         kb_found = any(kr["found"] for kr in kb_results) if kb_results else False
-        kb_all_found = all(kr["found"] for kr in kb_results) if kb_results else False
 
-        # Check if both subject and object have URIs (entities were linked)
-        both_entities_linked = all(
-            kr.get("subject_uri") and kr.get("object_uri")
-            for kr in kb_results
-        ) if kb_results else False
+        # No neural model: fall back to KB-only
+        if not neural_prediction:
+            if kb_found:
+                return "SUPPORTED", 0.6
+            return "NOT ENOUGH INFO", 0.3
 
-        # Check for property contradiction when KB finds no direct relation
-        contradiction = None
-        if not kb_found and both_entities_linked:
-            contradiction = self._check_property_contradiction(kb_results)
+        neural_label = neural_prediction["label"]
+        neural_conf = neural_prediction["confidence"]
 
-        # --- Compute a GAN confidence modifier ---------------------------
-        gan_modifier: float = 0.0
-        if gan_score is not None:
-            gan_modifier = (gan_score - 0.5) * 0.2
-
-        # Property contradiction overrides neural prediction
-        if contradiction is True and not kb_found:
-            return "REFUTED", min(0.99, max(0.1, 0.75 - gan_modifier))
-
-        if neural_prediction:
-            neural_label = neural_prediction["label"]
-            neural_conf = neural_prediction["confidence"]
-
-            # If KB confirms relation exists and neural says SUPPORTED -> high confidence SUPPORTED
-            if kb_all_found and neural_label == "SUPPORTED":
-                base = min(0.95, (neural_conf + 1.0) / 2)
-                return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
-
-            # If KB confirms relation exists but neural says REFUTED -> trust neural with lower confidence
-            if kb_found and neural_label == "REFUTED":
-                base = neural_conf * 0.7
-                return "REFUTED", min(0.99, max(0.1, base - gan_modifier))
-
-            # If KB finds nothing and neural says REFUTED -> REFUTED
-            if not kb_found and neural_label == "REFUTED":
-                base = neural_conf
-                return "REFUTED", min(0.99, max(0.1, base - gan_modifier))
-
-            # If KB finds something and neural says NOT ENOUGH INFO -> lean SUPPORTED
-            if kb_found and neural_label == "NOT ENOUGH INFO":
-                base = 0.5
-                return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
-
-            # If KB finds nothing and neural says SUPPORTED
-            if not kb_found and neural_label == "SUPPORTED":
-                # If we have properties but no contradiction → support from properties
-                if contradiction is False:
-                    base = min(0.95, (neural_conf + 1.0) / 2)
-                    return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
-                # Otherwise lower confidence
-                base = neural_conf * 0.6
-                return "SUPPORTED", min(0.99, max(0.1, base + gan_modifier))
-
-            # Otherwise, trust neural prediction
-            return neural_label, min(0.99, max(0.1, neural_conf + gan_modifier))
-
-        # No neural model: rely on KB (+ optional GAN boost)
-        if kb_all_found:
-            return "SUPPORTED", min(0.99, max(0.1, 0.7 + gan_modifier))
-        elif kb_found:
-            return "SUPPORTED", min(0.99, max(0.1, 0.5 + gan_modifier))
+        # KB agreement boost / disagreement penalty
+        if kb_found and neural_label == "SUPPORTED":
+            confidence = min(0.95, neural_conf * 1.2)
+        elif kb_found and neural_label == "REFUTED":
+            confidence = neural_conf * 0.8
+        elif not kb_found and neural_label == "SUPPORTED":
+            confidence = neural_conf * 0.7
+        elif not kb_found and neural_label == "REFUTED":
+            confidence = min(0.95, neural_conf * 1.1)
         else:
-            return "NOT ENOUGH INFO", min(0.99, max(0.1, 0.3 + gan_modifier))
+            confidence = neural_conf
+
+        confidence = min(0.99, max(0.1, confidence))
+        return neural_label, confidence
 
     def check_batch(self, claims: list[str]) -> list[dict]:
         """Check multiple claims."""

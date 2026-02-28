@@ -40,13 +40,9 @@ class FactClassifier:
 
         Returns dict with 'label', 'confidence', and 'probabilities'.
         """
-        if evidence:
-            text = f"{claim} [SEP] {evidence}"
-        else:
-            text = claim
-
         inputs = self.tokenizer(
-            text,
+            claim,
+            evidence if evidence else None,
             return_tensors="pt",
             truncation=True,
             max_length=256,
@@ -73,17 +69,13 @@ class FactClassifier:
     def predict_batch(self, claims: list[str], evidences: list[str] | None = None) -> list[dict]:
         """Predict labels for a batch of claims."""
         if evidences is None:
-            evidences = [""] * len(claims)
-
-        texts = []
-        for claim, evidence in zip(claims, evidences):
-            if evidence:
-                texts.append(f"{claim} [SEP] {evidence}")
-            else:
-                texts.append(claim)
+            evidences = [None] * len(claims)
+        else:
+            evidences = [e if e else None for e in evidences]
 
         inputs = self.tokenizer(
-            texts,
+            claims,
+            evidences,
             return_tensors="pt",
             truncation=True,
             max_length=256,

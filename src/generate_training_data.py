@@ -446,7 +446,8 @@ def generate_bert_data(
 ) -> list[dict]:
     """Generate BERT training data from fetched triplets.
 
-    Creates SUPPORTED, REFUTED, and NOT ENOUGH INFO examples.
+    Creates SUPPORTED, REFUTED, and NOT ENOUGH INFO examples with diverse
+    evidence formats that match both training templates and inference patterns.
     """
     data: list[dict] = []
     all_triplets: list[tuple[str, str, str]] = []
@@ -460,58 +461,100 @@ def generate_bert_data(
     # Collect all subjects and objects for entity swapping
     all_subjects = list({t[0] for t in all_triplets})
     all_objects = list({t[2] for t in all_triplets})
+    triplet_set = set(all_triplets)
+
+    # Build per-predicate object pools for same-type entity swapping
+    objects_by_predicate: dict[str, list[str]] = {}
+    for s, p, o in all_triplets:
+        objects_by_predicate.setdefault(p, []).append(o)
 
     for subj, pred, obj in all_triplets:
         templates = CLAIM_TEMPLATES.get(pred, ["{subject} {predicate} {object}"])
         evidence_tmpls = EVIDENCE_TEMPLATES.get(
             pred, ["DBpedia confirms {subject} is related to {object}"]
         )
+        dbo_pred = PRED_TO_SHORT.get(pred, pred)
 
         # --- SUPPORTED ---
         claim = random.choice(templates).format(subject=subj, object=obj)
-        evidence = random.choice(evidence_tmpls).format(subject=subj, object=obj)
+        # Diversify evidence: 70% formal template, 30% inference-style
+        if random.random() < 0.3:
+            evidence = f"DBpedia confirms {subj} is related to {obj} via {dbo_pred}"
+        else:
+            evidence = random.choice(evidence_tmpls).format(subject=subj, object=obj)
         data.append({
             "claim": claim,
             "evidence": evidence,
             "label": "SUPPORTED",
         })
 
-        # --- REFUTED (swap object with a random different one) ---
-        wrong_obj = random.choice(all_objects)
+        # --- REFUTED (swap with same-type entity for harder negatives) ---
+        pred_objects = objects_by_predicate.get(pred, all_objects)
+        wrong_obj = random.choice(pred_objects)
         attempts = 0
         while wrong_obj == obj and attempts < 10:
-            wrong_obj = random.choice(all_objects)
+            wrong_obj = random.choice(pred_objects)
             attempts += 1
         if wrong_obj != obj:
             claim_ref = random.choice(templates).format(subject=subj, object=wrong_obj)
-            evidence_ref = (
-                f"DBpedia confirms {subj} is related to {obj} via "
-                f"{PRED_TO_SHORT.get(pred, pred)}, not {wrong_obj}"
-            )
+            # Diversify evidence: 50% explicit "not X", 50% property-based
+            if random.random() < 0.5:
+                evidence_ref = (
+                    f"DBpedia confirms {subj} is related to {obj} via "
+                    f"{dbo_pred}, not {wrong_obj}"
+                )
+            else:
+                evidence_ref = (
+                    f"No direct relation found between {subj} and {wrong_obj} in DBpedia. "
+                    f"{subj} {pred} is {obj}"
+                )
             data.append({
                 "claim": claim_ref,
                 "evidence": evidence_ref,
                 "label": "REFUTED",
             })
 
-        # --- NOT ENOUGH INFO (50% chance to avoid imbalance) ---
-        if random.random() < 0.5:
+        # --- NOT ENOUGH INFO (80% chance for better balance ~30% of total) ---
+        if random.random() < 0.8:
             rand_subj = random.choice(all_subjects)
             rand_obj = random.choice(all_objects)
             attempts = 0
-            while (rand_subj, pred, rand_obj) in {(s, p, o) for s, p, o in all_triplets} and attempts < 10:
+            while (rand_subj, pred, rand_obj) in triplet_set and attempts < 10:
                 rand_subj = random.choice(all_subjects)
                 rand_obj = random.choice(all_objects)
                 attempts += 1
-            nei_templates = [
-                f"{rand_subj} {pred} {rand_obj}",
+            # Use real claim templates (not just raw predicate)
+            nei_claim_templates = [
+                random.choice(templates).format(subject=rand_subj, object=rand_obj),
                 f"There is a connection between {rand_subj} and {rand_obj}",
             ]
-            claim_nei = random.choice(nei_templates)
-            evidence_nei = f"No direct relation found between {rand_subj} and {rand_obj} in DBpedia"
+            claim_nei = random.choice(nei_claim_templates)
+            # Diversify NEI evidence patterns
+            nei_evidence_patterns = [
+                f"No direct relation found between {rand_subj} and {rand_obj} in DBpedia",
+                f"No direct relation found between {rand_subj} and {rand_obj} in DBpedia. "
+                f"{rand_subj} is a known entity but no connection to {rand_obj} was found",
+            ]
+            evidence_nei = random.choice(nei_evidence_patterns)
             data.append({
                 "claim": claim_nei,
                 "evidence": evidence_nei,
+                "label": "NOT ENOUGH INFO",
+            })
+
+    # Add cross-predicate NEI: valid entity pair with wrong predicate
+    cross_nei_count = len(all_triplets) // 4
+    for _ in range(cross_nei_count):
+        t1 = random.choice(all_triplets)
+        t2 = random.choice(all_triplets)
+        if t1[1] != t2[1]:
+            cross_subj, wrong_pred, cross_obj = t1[0], t2[1], t1[2]
+            cross_templates = CLAIM_TEMPLATES.get(wrong_pred, ["{subject} {predicate} {object}"])
+            claim = random.choice(cross_templates).format(subject=cross_subj, object=cross_obj)
+            evidence = f"No direct relation found between {cross_subj} and {cross_obj} in DBpedia"
+            data.append({
+                "claim": claim,
+                "evidence": evidence,
                 "label": "NOT ENOUGH INFO",
             })
 

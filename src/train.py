@@ -30,13 +30,12 @@ class FactCheckDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         claim = item["claim"]
-        evidence = item.get("evidence", "")
+        evidence = item.get("evidence", "") or None
         label = item["label"]
 
-        text = f"{claim} [SEP] {evidence}" if evidence else claim
-
         encoding = self.tokenizer(
-            text,
+            claim,
+            evidence,
             truncation=True,
             max_length=self.max_length,
             padding="max_length",
@@ -46,6 +45,7 @@ class FactCheckDataset(Dataset):
         return {
             "input_ids": encoding["input_ids"].squeeze(0),
             "attention_mask": encoding["attention_mask"].squeeze(0),
+            "token_type_ids": encoding["token_type_ids"].squeeze(0),
             "label": torch.tensor(LABEL_TO_ID[label], dtype=torch.long),
         }
 
@@ -166,9 +166,10 @@ def train(
         for batch in train_loader:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
+            token_type_ids = batch["token_type_ids"].to(device)
             labels = batch["label"].to(device)
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, labels=labels)
             loss = outputs.loss
 
             optimizer.zero_grad()
@@ -189,9 +190,10 @@ def train(
             for batch in val_loader:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
+                token_type_ids = batch["token_type_ids"].to(device)
                 labels = batch["label"].to(device)
 
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
                 preds = torch.argmax(outputs.logits, dim=-1)
                 all_preds.extend(preds.cpu().tolist())
                 all_labels.extend(labels.cpu().tolist())
