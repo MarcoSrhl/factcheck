@@ -20,7 +20,7 @@ from src.model import LABEL_TO_ID, LABEL_MAP, NUM_LABELS
 class FactCheckDataset(Dataset):
     """Dataset for fact-checking claims."""
 
-    def __init__(self, data: list[dict], tokenizer: BertTokenizer, max_length: int = 256):
+    def __init__(self, data: list[dict], tokenizer: BertTokenizer, max_length: int = 128):
         self.data = data
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -143,14 +143,14 @@ def train(
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    num_workers = min(8, os.cpu_count() or 1)
+    num_workers = 4
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True,
-        num_workers=num_workers, pin_memory=True, persistent_workers=True,
+        num_workers=num_workers, persistent_workers=True,
     )
     val_loader = DataLoader(
         val_dataset, batch_size=batch_size,
-        num_workers=num_workers, pin_memory=True, persistent_workers=True,
+        num_workers=num_workers, persistent_workers=True,
     )
 
     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
