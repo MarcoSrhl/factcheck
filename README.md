@@ -24,7 +24,7 @@ Input Claim
             ▼
 ┌──────────────────────────┐
 │ 3. Knowledge Base Query   │  SPARQL + JSON endpoints
-│    Verify triplet against │  Local GraphDB or remote DBpedia
+│    Verify triplet against │  DBpedia SPARQL and JSON API
 │    DBpedia                │
 └───────────┬──────────────┘
             │
@@ -78,15 +78,6 @@ fact-checker/
 │   ├── generate_training_data.py # DBpedia-based training data generation
 │   ├── split_data.py             # Stratified train/validation split
 │   └── validate_pipeline.py      # End-to-end pipeline validation
-├── db/
-│   ├── config/
-│   │   └── graphdb_config.py     # GraphDB connection configuration
-│   ├── queries/
-│   │   └── sparql_templates.py   # Reusable SPARQL query templates
-│   └── scripts/
-│       ├── setup_graphdb.py      # GraphDB repository setup
-│       ├── load_dbpedia_data.py  # Load DBpedia subgraphs into GraphDB
-│       └── manage_users.py       # GraphDB user management
 ├── tests/
 │   ├── test_triplet_extractor.py
 │   ├── test_entity_linker.py
@@ -209,9 +200,7 @@ Includes entity text cleaning (strips determiners, possessives, parentheticals),
 
 ### 3. Knowledge Base Query (`src/knowledge_query.py`)
 
-Two verification backends:
-- **Remote** (default): Queries the public DBpedia SPARQL endpoint + JSON API
-- **Local**: Queries a local GraphDB instance for faster, rate-limit-free access
+Queries the public DBpedia SPARQL endpoint + JSON API for fact verification.
 
 Methods:
 - `sparql_check_relation`: Finds all predicates between two entities
@@ -276,22 +265,17 @@ Generation process:
 | `validation.json` | 11,145 | 20% stratified validation split |
 | `t5_training_data.json` | 5,000 | T5 explainer training data |
 
-## Local GraphDB Setup (Optional)
+## ML Experiment Tracking
 
-For faster queries without rate limits, you can run a local GraphDB instance:
+The system can be integrated with MLflow for experiment tracking and model versioning:
 
 ```bash
-# Setup repository
-python -m db.scripts.setup_graphdb --wait 30
-
-# Load DBpedia data
-python -m db.scripts.load_dbpedia_data --limit 500
-
-# Manage users (optional)
-python -m db.scripts.manage_users create --username reader --role reader
+# Train models (MLflow integration can be added to training scripts)
+python -m src.train --data data/train.json --epochs 10
+python -m src.train_explainer --epochs 8
 ```
 
-Configure via environment variables: `GRAPHDB_HOST`, `GRAPHDB_PORT`, `GRAPHDB_REPOSITORY`.
+> **Note**: The previous GraphDB local database setup has been removed. The system now queries DBpedia directly via SPARQL/JSON APIs.
 
 ## Results
 

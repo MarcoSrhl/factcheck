@@ -1,13 +1,6 @@
-"""Knowledge base querying: SPARQL and JSON endpoints on DBpedia or local GraphDB.
+"""Knowledge base querying: SPARQL and JSON endpoints on DBpedia.
 
-Supports two modes of operation:
-  - **Remote** (default): queries the public DBpedia SPARQL endpoint and JSON API.
-  - **Local**: queries a local GraphDB instance (e.g. ``http://localhost:7200``).
-
-Switch modes with the ``use_local`` constructor parameter::
-
-    kq = KnowledgeQuery(use_local=True)   # local GraphDB
-    kq = KnowledgeQuery(use_local=False)  # remote DBpedia (default)
+Queries the public DBpedia SPARQL endpoint and JSON API for fact verification.
 """
 
 import logging
@@ -17,53 +10,23 @@ from SPARQLWrapper import SPARQLWrapper, JSON
 
 logger = logging.getLogger(__name__)
 
-# Remote DBpedia endpoints (original behaviour)
+# DBpedia endpoints
 SPARQL_ENDPOINT = "https://dbpedia.org/sparql"
 DBPEDIA_DATA_URL = "https://dbpedia.org/data/{entity}.json"
 
-# Local GraphDB defaults (can be overridden via environment variables)
-LOCAL_GRAPHDB_HOST = os.environ.get("GRAPHDB_HOST", "localhost")
-LOCAL_GRAPHDB_PORT = os.environ.get("GRAPHDB_PORT", "7200")
-LOCAL_GRAPHDB_REPO = os.environ.get("GRAPHDB_REPOSITORY", "factcheck")
-LOCAL_SPARQL_ENDPOINT = (
-    f"http://{LOCAL_GRAPHDB_HOST}:{LOCAL_GRAPHDB_PORT}"
-    f"/repositories/{LOCAL_GRAPHDB_REPO}"
-)
-
 
 class KnowledgeQuery:
-    """Query a knowledge base for fact verification.
-
-    Parameters
-    ----------
-    use_local : bool
-        If True, all SPARQL queries are sent to the local GraphDB instance
-        instead of the public DBpedia endpoint.  JSON-based methods are only
-        available in remote mode and will log a warning if called in local mode.
-    local_endpoint : str or None
-        Override the local SPARQL endpoint URL.  Defaults to
-        ``http://localhost:7200/repositories/factcheck`` (configurable via
-        ``GRAPHDB_HOST``, ``GRAPHDB_PORT``, ``GRAPHDB_REPOSITORY`` env vars).
+    """Query DBpedia knowledge base for fact verification.
+    
+    Uses both SPARQL and JSON endpoints for optimal performance.
     """
 
-    def __init__(
-        self,
-        use_local: bool = False,
-        local_endpoint: str | None = None,
-    ):
-        self.use_local = use_local
-
-        if use_local:
-            endpoint = local_endpoint or LOCAL_SPARQL_ENDPOINT
-            logger.info("Using LOCAL GraphDB endpoint: %s", endpoint)
-        else:
-            endpoint = SPARQL_ENDPOINT
-            logger.info("Using REMOTE DBpedia endpoint: %s", endpoint)
-
-        self.sparql = SPARQLWrapper(endpoint)
+    def __init__(self):
+        """Initialize DBpedia query client."""
+        self.sparql = SPARQLWrapper(SPARQL_ENDPOINT)
         self.sparql.setReturnFormat(JSON)
         self._json_cache: dict[str, dict] = {}
-        self._endpoint = endpoint
+        logger.info("Using DBpedia endpoint: %s", SPARQL_ENDPOINT)
 
     # --- SPARQL-based methods ---
 
@@ -123,18 +86,7 @@ class KnowledgeQuery:
     # --- JSON-based methods (remote DBpedia only) ---
 
     def json_get_entity_data(self, entity_uri: str) -> dict:
-        """Fetch all triples for an entity via the DBpedia JSON endpoint.
-
-        Note: This method is only available when querying remote DBpedia.
-        In local mode it returns an empty dict and logs a warning.
-        """
-        if self.use_local:
-            logger.warning(
-                "json_get_entity_data is not available in local mode. "
-                "Use SPARQL-based methods instead."
-            )
-            return {}
-
+        """Fetch all triples for an entity via the DBpedia JSON endpoint."""
         if entity_uri in self._json_cache:
             return self._json_cache[entity_uri]
 
@@ -250,46 +202,30 @@ class KnowledgeQuery:
         Returns a dict with:
           - found: bool
           - predicates: list of matching predicate URIs
-          - method: 'sparql', 'sparql-local', 'json', or 'none'
-
-        In local mode the JSON fallback is skipped since the local GraphDB
-        instance does not expose a DBpedia-style JSON API.
+          - method: 'sparql', 'json', or 'none'
         """
         if not subject_uri or not object_uri:
             return {"found": False, "predicates": [], "method": "none"}
 
-        # Try SPARQL first (works in both local and remote mode)
+        # Try SPARQL first
         predicates = self.sparql_check_relation(subject_uri, object_uri)
         if predicates:
-            method = "sparql-local" if self.use_local else "sparql"
-            return {"found": True, "predicates": predicates, "method": method}
+            return {"found": True, "predicates": predicates, "method": "sparql"}
 
-        # Fallback to JSON (remote mode only)
-        if not self.use_local:
-            predicates = self.json_check_relation(subject_uri, object_uri)
-            if predicates:
-                return {"found": True, "predicates": predicates, "method": "json"}
+        # Fallback to JSON API
+        predicates = self.json_check_relation(subject_uri, object_uri)
+        if predicates:
+            return {"found": True, "predicates": predicates, "method": "json"}
 
         return {"found": False, "predicates": [], "method": "none"}
 
 
 if __name__ == "__main__":
-    import argparse
-
     logging.basicConfig(level=logging.INFO)
 
-    parser = argparse.ArgumentParser(description="Knowledge query demo")
-    parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Query the local GraphDB instance instead of remote DBpedia.",
-    )
-    args = parser.parse_args()
+    kq = KnowledgeQuery()
 
-    kq = KnowledgeQuery(use_local=args.local)
-    mode_label = "LOCAL GraphDB" if args.local else "REMOTE DBpedia"
-
-    print(f"=== Mode: {mode_label} ===\n")
+    print("=== DBpedia Knowledge Query Demo ===")
 
     print("=== SPARQL: relations between Paris and France ===")
     preds = kq.sparql_check_relation(
