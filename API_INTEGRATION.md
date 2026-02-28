@@ -15,6 +15,23 @@ factcheck @ git+https://github.com/MarcoSrhl/factcheck.git
 spacy>=3.5.0
 ```
 
+### Verify Installation
+
+After installing, test that it works:
+
+```bash
+# Download the test script
+curl -O https://raw.githubusercontent.com/MarcoSrhl/factcheck/main/test_installation.py
+
+# Run it
+python test_installation.py
+```
+
+Or test manually:
+```python
+python -c "from factcheck import FactChecker, FactClassifier; print('✅ Package works!')"
+```
+
 ---
 
 ## Quick Start
