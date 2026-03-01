@@ -108,7 +108,7 @@ class EntityLinker:
                 DBPEDIA_LOOKUP_URL,
                 params=params,
                 headers=headers,
-                timeout=10,
+                timeout=15,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -151,6 +151,10 @@ class EntityLinker:
         # 1. Label similarity (0.40)
         similarity = SequenceMatcher(None, query_lower, label_lower).ratio()
 
+        # Hard reject: if label is very different from query, don't consider it
+        if similarity < 0.4:
+            return 0.0
+
         # 2. Exact match bonus (0.20)
         exact_match = 1.0 if query_lower == label_lower else 0.0
 
@@ -175,16 +179,24 @@ class EntityLinker:
         popularity = math.log(1 + ref_count) / 20.0  # normalize roughly to 0-1
         popularity = min(popularity, 1.0)
 
+        # 5. Word overlap bonus: reward candidates sharing key words with query
+        query_words = set(query_lower.split())
+        label_words_set = set(label_lower.split())
+        if query_words and label_words_set:
+            overlap = len(query_words & label_words_set) / max(len(query_words), len(label_words_set))
+        else:
+            overlap = 0.0
+
         score = (
-            0.40 * similarity
+            0.30 * similarity
             + 0.20 * exact_match
-            + 0.25 * uri_simplicity
-            + 0.15 * popularity
+            + 0.15 * uri_simplicity
+            + 0.10 * popularity
+            + 0.25 * overlap
         )
 
         # Penalize when a short single-word query matches a multi-word label
         # (e.g., "capital" matching "Capitol Records")
-        query_words = query_lower.split()
         label_words = label_lower.split()
         if len(query_words) == 1 and len(label_words) > 2 and exact_match == 0.0:
             score *= 0.5
@@ -205,7 +217,7 @@ class EntityLinker:
                 best_score = score
                 best_uri = resource
 
-        if best_score >= 0.4:
+        if best_score >= 0.55:
             return best_uri
         return None
 
@@ -226,25 +238,25 @@ class EntityLinker:
                 "https://en.wikipedia.org/w/api.php",
                 params=params,
                 headers=headers,
-                timeout=10,
+                timeout=15,
             )
             resp.raise_for_status()
             results = resp.json().get("query", {}).get("search", [])
             if not results:
                 return None
 
-            # Pick the best title match
+            # Pick the best title match — require reasonable similarity
             query_lower = entity_text.lower()
             for hit in results:
                 title = hit.get("title", "")
-                uri = f"http://dbpedia.org/resource/{title.replace(' ', '_')}"
+                title_lower = title.lower()
+                sim = SequenceMatcher(None, query_lower, title_lower).ratio()
                 # Accept if title closely matches the query
-                if title.lower() == query_lower or query_lower in title.lower():
-                    return uri
+                if title_lower == query_lower or sim >= 0.7:
+                    return f"http://dbpedia.org/resource/{title.replace(' ', '_')}"
 
-            # If no close match, use the first result
-            title = results[0]["title"]
-            return f"http://dbpedia.org/resource/{title.replace(' ', '_')}"
+            # Don't use a non-matching first result — better to return None
+            return None
 
         except requests.RequestException as e:
             logger.error(f"Wikipedia API failed for '{entity_text}': {e}")
@@ -272,11 +284,20 @@ class EntityLinker:
         # Remove trailing punctuation
         text = re.sub(r"[.,;:!?]+$", "", text)
         # Remove leading determiners
-        stop_words = {"the", "a", "an"}
+        stop_words = {"the", "a", "an", "its"}
         words = text.split()
         if words and words[0].lower() in stop_words:
             words = words[1:]
-        return " ".join(words).strip()
+        # Strip trailing generic words: "a Country music work" → "Country music"
+        trailing_generic = {"work", "genre", "season", "nationality", "type"}
+        while words and words[-1].lower() in trailing_generic:
+            words.pop()
+        # Handle "headquarters in X" → "X"
+        text = " ".join(words).strip()
+        m = re.match(r"(?:headquarters?\s+in|based\s+in)\s+(.+)", text, re.IGNORECASE)
+        if m:
+            text = m.group(1).strip()
+        return text
 
     def link_triplet(
         self, triplet: tuple[str, str, str]

@@ -16,170 +16,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from factcheck.sparql_queries import (
-    QUERY_REGISTRY,
-    fetch_mixed_triplets,
-    _uri_to_label,
-    _run_query,
-)
+from factcheck.sparql_queries import QUERY_REGISTRY
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Additional SPARQL queries for more diversity
-# ---------------------------------------------------------------------------
-
-EXTRA_QUERIES: dict[str, dict] = {
-    "nationalities": {
-        "query": """
-        SELECT DISTINCT ?person ?country WHERE {{
-            ?person dbo:nationality ?country .
-            ?person a dbo:Person .
-            ?country a dbo:Country .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["person", "country"],
-        "predicate": "has nationality",
-    },
-    "genres": {
-        "query": """
-        SELECT DISTINCT ?work ?genre WHERE {{
-            ?work dbo:genre ?genre .
-            ?work a dbo:Work .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["work", "genre"],
-        "predicate": "belongs to genre",
-    },
-    "companies_founders": {
-        "query": """
-        SELECT DISTINCT ?company ?founder WHERE {{
-            ?company dbo:founder ?founder .
-            ?founder a dbo:Person .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["company", "founder"],
-        "predicate": "was founded by",
-    },
-    "spouse": {
-        "query": """
-        SELECT DISTINCT ?person ?spouse WHERE {{
-            ?person dbo:spouse ?spouse .
-            ?person a dbo:Person .
-            ?spouse a dbo:Person .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["person", "spouse"],
-        "predicate": "is married to",
-    },
-    "country_of": {
-        "query": """
-        SELECT DISTINCT ?place ?country WHERE {{
-            ?place dbo:country ?country .
-            ?place a dbo:Place .
-            ?country a dbo:Country .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["place", "country"],
-        "predicate": "is in",
-    },
-    "languages": {
-        "query": """
-        SELECT DISTINCT ?country ?lang WHERE {{
-            ?country dbo:language ?lang .
-            ?country a dbo:Country .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["country", "lang"],
-        "predicate": "has official language",
-    },
-    "awards": {
-        "query": """
-        SELECT DISTINCT ?person ?award WHERE {{
-            ?person dbo:award ?award .
-            ?person a dbo:Person .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["person", "award"],
-        "predicate": "received",
-    },
-    "known_for": {
-        "query": """
-        SELECT DISTINCT ?person ?thing WHERE {{
-            ?person dbo:knownFor ?thing .
-            ?person a dbo:Person .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["person", "thing"],
-        "predicate": "is known for",
-    },
-    "death_places": {
-        "query": """
-        SELECT DISTINCT ?person ?place WHERE {{
-            ?person dbo:deathPlace ?place .
-            ?person a dbo:Person .
-            ?place a dbo:Place .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["person", "place"],
-        "predicate": "died in",
-    },
-    "headquarters": {
-        "query": """
-        SELECT DISTINCT ?org ?place WHERE {{
-            ?org dbo:headquarter ?place .
-            ?place a dbo:Place .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["org", "place"],
-        "predicate": "has headquarters in",
-    },
-    "developers": {
-        "query": """
-        SELECT DISTINCT ?product ?dev WHERE {{
-            ?product dbo:developer ?dev .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["product", "dev"],
-        "predicate": "was developed by",
-    },
-    "rivers_countries": {
-        "query": """
-        SELECT DISTINCT ?river ?country WHERE {{
-            ?river dbo:country ?country .
-            ?river a dbo:River .
-            ?country a dbo:Country .
-        }}
-        LIMIT {limit}
-        """,
-        "vars": ["river", "country"],
-        "predicate": "flows through",
-    },
-}
-
-
-def _fetch_extra_category(
-    name: str, info: dict, limit: int
-) -> list[tuple[str, str, str]]:
-    """Fetch triplets for one extra category."""
-    query = info["query"].format(limit=limit)
-    rows = _run_query(query, info["vars"])
-    predicate = info["predicate"]
-    return [
-        (_uri_to_label(row[0]), predicate, _uri_to_label(row[1]))
-        for row in rows
-    ]
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +111,86 @@ CLAIM_TEMPLATES: dict[str, list[str]] = {
         "{subject} flows through {object}",
         "The {subject} river passes through {object}",
     ],
+    "is in the city of": [
+        "{subject} is in the city of {object}",
+        "{subject} is in {object}",
+    ],
+    "plays for": [
+        "{subject} plays for {object}",
+        "{subject} is a member of {object}",
+    ],
+    "is managed by": [
+        "{subject} is managed by {object}",
+        "{object} manages {subject}",
+    ],
+    "was directed by": [
+        "{subject} was directed by {object}",
+        "{object} directed {subject}",
+    ],
+    "was produced by": [
+        "{subject} was produced by {object}",
+        "{object} produced {subject}",
+    ],
+    "stars": [
+        "{subject} stars {object}",
+        "{object} stars in {subject}",
+    ],
+    "is child of": [
+        "{subject} is the child of {object}",
+        "{object} is the parent of {subject}",
+    ],
+    "is parent of": [
+        "{subject} is the parent of {object}",
+        "{object} is the child of {subject}",
+    ],
+    "follows": [
+        "{subject} follows {object}",
+        "{subject} practices {object}",
+    ],
+    "is member of": [
+        "{subject} is a member of {object}",
+        "{subject} belongs to {object}",
+    ],
+    "is in language": [
+        "{subject} is in {object}",
+        "{subject} is written in {object}",
+    ],
+    "is in industry": [
+        "{subject} is in the {object} industry",
+        "{subject} operates in {object}",
+    ],
+    "produces": [
+        "{subject} produces {object}",
+        "{object} is a product of {subject}",
+    ],
+    "uses currency": [
+        "{subject} uses {object} as currency",
+        "The currency of {subject} is {object}",
+    ],
+    "plays": [
+        "{subject} plays {object}",
+        "{subject} is a {object} player",
+    ],
+    "is signed to": [
+        "{subject} is signed to {object}",
+        "{subject} records for {object}",
+    ],
+    "is associated with": [
+        "{subject} is associated with {object}",
+        "{subject} has worked with {object}",
+    ],
+    "is distributed by": [
+        "{subject} is distributed by {object}",
+        "{object} distributes {subject}",
+    ],
+    "is owned by": [
+        "{subject} is owned by {object}",
+        "{object} owns {subject}",
+    ],
+    "has chairman": [
+        "{subject} has {object} as chairman",
+        "{object} is the chairman of {subject}",
+    ],
 }
 
 # Evidence templates per predicate
@@ -339,6 +258,66 @@ EVIDENCE_TEMPLATES: dict[str, list[str]] = {
     "flows through": [
         "DBpedia confirms {subject} is related to {object} via dbo:country",
     ],
+    "is in the city of": [
+        "DBpedia confirms {subject} is related to {object} via dbo:city",
+    ],
+    "plays for": [
+        "DBpedia confirms {subject} is related to {object} via dbo:team",
+    ],
+    "is managed by": [
+        "DBpedia confirms {subject} is related to {object} via dbo:manager",
+    ],
+    "was directed by": [
+        "DBpedia confirms {subject} is related to {object} via dbo:director",
+    ],
+    "was produced by": [
+        "DBpedia confirms {subject} is related to {object} via dbo:producer",
+    ],
+    "stars": [
+        "DBpedia confirms {subject} is related to {object} via dbo:starring",
+    ],
+    "is child of": [
+        "DBpedia confirms {subject} is related to {object} via dbo:parent",
+    ],
+    "is parent of": [
+        "DBpedia confirms {subject} is related to {object} via dbo:child",
+    ],
+    "follows": [
+        "DBpedia confirms {subject} is related to {object} via dbo:religion",
+    ],
+    "is member of": [
+        "DBpedia confirms {subject} is related to {object} via dbo:party",
+    ],
+    "is in language": [
+        "DBpedia confirms {subject} is related to {object} via dbo:language",
+    ],
+    "is in industry": [
+        "DBpedia confirms {subject} is related to {object} via dbo:industry",
+    ],
+    "produces": [
+        "DBpedia confirms {subject} is related to {object} via dbo:product",
+    ],
+    "uses currency": [
+        "DBpedia confirms {subject} is related to {object} via dbo:currency",
+    ],
+    "plays": [
+        "DBpedia confirms {subject} is related to {object} via dbo:instrument",
+    ],
+    "is signed to": [
+        "DBpedia confirms {subject} is related to {object} via dbo:recordLabel",
+    ],
+    "is associated with": [
+        "DBpedia confirms {subject} is related to {object} via dbo:associatedBand",
+    ],
+    "is distributed by": [
+        "DBpedia confirms {subject} is related to {object} via dbo:distributor",
+    ],
+    "is owned by": [
+        "DBpedia confirms {subject} is related to {object} via dbo:owner",
+    ],
+    "has chairman": [
+        "DBpedia confirms {subject} is related to {object} via dbo:chairman",
+    ],
 }
 
 # T5 explanation templates per verdict
@@ -389,6 +368,26 @@ PRED_TO_SHORT: dict[str, str] = {
     "has headquarters in": "dbo:headquarter",
     "was developed by": "dbo:developer",
     "flows through": "dbo:country",
+    "is in the city of": "dbo:city",
+    "plays for": "dbo:team",
+    "is managed by": "dbo:manager",
+    "was directed by": "dbo:director",
+    "was produced by": "dbo:producer",
+    "stars": "dbo:starring",
+    "is child of": "dbo:parent",
+    "is parent of": "dbo:child",
+    "follows": "dbo:religion",
+    "is member of": "dbo:party",
+    "is in language": "dbo:language",
+    "is in industry": "dbo:industry",
+    "produces": "dbo:product",
+    "uses currency": "dbo:currency",
+    "plays": "dbo:instrument",
+    "is signed to": "dbo:recordLabel",
+    "is associated with": "dbo:associatedBand",
+    "is distributed by": "dbo:distributor",
+    "is owned by": "dbo:owner",
+    "has chairman": "dbo:chairman",
 }
 
 
@@ -403,27 +402,19 @@ def fetch_all_triplets(
 ) -> dict[str, list[tuple[str, str, str]]]:
     """Fetch triplets from all categories in parallel.
 
+    Uses the unified QUERY_REGISTRY from sparql_queries.py.
     Returns a dict mapping category name -> list of triplets.
     """
     all_triplets: dict[str, list[tuple[str, str, str]]] = {}
 
-    def _fetch_standard(cat_name: str, fetch_fn, limit: int):
+    def _fetch(cat_name: str, fetch_fn, limit: int):
         return cat_name, fetch_fn(limit=limit)
-
-    def _fetch_extra(cat_name: str, info: dict, limit: int):
-        return cat_name, _fetch_extra_category(cat_name, info, limit)
 
     futures = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Standard categories from QUERY_REGISTRY
         for name, fn in QUERY_REGISTRY.items():
             futures.append(
-                executor.submit(_fetch_standard, name, fn, per_category)
-            )
-        # Extra categories
-        for name, info in EXTRA_QUERIES.items():
-            futures.append(
-                executor.submit(_fetch_extra, name, info, per_category)
+                executor.submit(_fetch, name, fn, per_category)
             )
 
         for future in as_completed(futures):
@@ -663,7 +654,7 @@ def generate_all(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    print(f"Fetching triplets from DBpedia ({len(QUERY_REGISTRY) + len(EXTRA_QUERIES)} categories, "
+    print(f"Fetching triplets from DBpedia ({len(QUERY_REGISTRY)} categories, "
           f"up to {per_category} each, {max_workers} workers)...")
     start = time.time()
     triplets_by_cat = fetch_all_triplets(

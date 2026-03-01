@@ -144,10 +144,15 @@ class KnowledgeQuery:
         "http://dbpedia.org/ontology/largestCity",
         "http://dbpedia.org/ontology/officialLanguage",
         "http://dbpedia.org/ontology/continent",
+        "http://dbpedia.org/ontology/spouse",
+        "http://dbpedia.org/ontology/team",
+        "http://dbpedia.org/ontology/author",
+        "http://dbpedia.org/ontology/director",
         "http://dbpedia.org/property/birthPlace",
         "http://dbpedia.org/property/capital",
         "http://dbpedia.org/property/location",
         "http://dbpedia.org/property/country",
+        "http://dbpedia.org/property/spouse",
         "http://www.w3.org/2000/01/rdf-schema#comment",
     ]
 
