@@ -32,9 +32,70 @@ class EntityLinker:
         return uri
 
     def _lookup(self, entity_text: str) -> str | None:
-        """Query the DBpedia Lookup API with disambiguation scoring."""
-        clean = self._clean_entity(entity_text)
+        """Query the DBpedia Lookup API with disambiguation scoring.
 
+        Multi-phase approach: try with parentheticals first, then without,
+        then extract proper noun from descriptive phrases.
+        """
+        # Phase 1: try with parentheticals preserved
+        clean_with_parens = self._clean_entity(entity_text, keep_parens=True)
+        result = self._try_api_lookup(clean_with_parens)
+        if result:
+            return result
+
+        # Phase 2: try without parentheticals
+        clean_no_parens = self._clean_entity(entity_text, keep_parens=False)
+        if clean_no_parens != clean_with_parens:
+            result = self._try_api_lookup(clean_no_parens)
+            if result:
+                return result
+
+        # Phase 3: extract proper noun from descriptive phrases
+        # "capital of Japan" → try "Japan", "birthplace of X" → try "X"
+        extracted = self._extract_entity_from_phrase(clean_no_parens)
+        if extracted and extracted != clean_no_parens:
+            result = self._try_api_lookup(extracted)
+            if result:
+                logger.info(f"Linked '{entity_text}' -> {result} (phrase extraction)")
+                return result
+
+        # Phase 4: Wikipedia API search → DBpedia URI
+        for clean in dict.fromkeys([clean_with_parens, clean_no_parens]):
+            result = self._wikipedia_lookup(clean)
+            if result:
+                logger.info(f"Linked '{entity_text}' -> {result} (wikipedia)")
+                return result
+
+        # Fallback: construct URI directly
+        for clean in dict.fromkeys([clean_with_parens, clean_no_parens]):
+            fallback = self._fallback_lookup(clean)
+            if fallback:
+                logger.info(f"Linked '{clean}' -> {fallback} (fallback)")
+                return fallback
+
+        logger.warning(f"No DBpedia results for: {entity_text}")
+        return None
+
+    def _extract_entity_from_phrase(self, text: str) -> str | None:
+        """Extract the likely entity from descriptive phrases.
+
+        Handles patterns like:
+          - "capital of Japan" → "Japan"
+          - "birthplace of Einstein" → "Einstein"
+          - "author of Hamlet" → "Hamlet"
+        """
+        if " of " not in text:
+            return None
+        parts = text.split(" of ", 1)
+        after_of = parts[1].strip()
+        # Only extract if the part after "of" looks like an entity
+        # (starts with uppercase or is multi-word)
+        if after_of and (after_of[0].isupper() or len(after_of.split()) > 1):
+            return after_of
+        return None
+
+    def _try_api_lookup(self, clean: str) -> str | None:
+        """Try DBpedia Lookup API for a cleaned entity string."""
         params = {
             "query": clean,
             "maxResults": 10,
@@ -58,22 +119,14 @@ class EntityLinker:
                 if best:
                     logger.info(f"Linked '{clean}' -> {best}")
                     return best
-
-            # Fallback: try constructing the URI directly
-            fallback = self._fallback_lookup(clean)
-            if fallback:
-                logger.info(f"Linked '{clean}' -> {fallback} (fallback)")
-                return fallback
-
-            logger.warning(f"No DBpedia results for: {clean}")
             return None
 
         except requests.RequestException as e:
             logger.error(f"DBpedia Lookup failed for '{clean}': {e}")
-            return self._fallback_lookup(clean)
+            return None
         except (ValueError, KeyError) as e:
             logger.error(f"Failed to parse DBpedia response for '{clean}': {e}")
-            return self._fallback_lookup(clean)
+            return None
 
     def _score_candidate(self, doc: dict, query: str) -> float:
         """Score a candidate document for disambiguation.
@@ -128,6 +181,14 @@ class EntityLinker:
             + 0.25 * uri_simplicity
             + 0.15 * popularity
         )
+
+        # Penalize when a short single-word query matches a multi-word label
+        # (e.g., "capital" matching "Capitol Records")
+        query_words = query_lower.split()
+        label_words = label_lower.split()
+        if len(query_words) == 1 and len(label_words) > 2 and exact_match == 0.0:
+            score *= 0.5
+
         return score
 
     def _select_best_candidate(self, docs: list[dict], query: str) -> str | None:
@@ -144,9 +205,50 @@ class EntityLinker:
                 best_score = score
                 best_uri = resource
 
-        if best_score >= 0.3:
+        if best_score >= 0.4:
             return best_uri
         return None
+
+    def _wikipedia_lookup(self, entity_text: str) -> str | None:
+        """Search Wikipedia API and convert the top result to a DBpedia URI."""
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": entity_text,
+            "srlimit": 3,
+            "format": "json",
+        }
+        headers = {
+            "User-Agent": "FactChecker/1.0 (academic project; entity linking)",
+        }
+        try:
+            resp = requests.get(
+                "https://en.wikipedia.org/w/api.php",
+                params=params,
+                headers=headers,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            results = resp.json().get("query", {}).get("search", [])
+            if not results:
+                return None
+
+            # Pick the best title match
+            query_lower = entity_text.lower()
+            for hit in results:
+                title = hit.get("title", "")
+                uri = f"http://dbpedia.org/resource/{title.replace(' ', '_')}"
+                # Accept if title closely matches the query
+                if title.lower() == query_lower or query_lower in title.lower():
+                    return uri
+
+            # If no close match, use the first result
+            title = results[0]["title"]
+            return f"http://dbpedia.org/resource/{title.replace(' ', '_')}"
+
+        except requests.RequestException as e:
+            logger.error(f"Wikipedia API failed for '{entity_text}': {e}")
+            return None
 
     def _fallback_lookup(self, entity_text: str) -> str | None:
         """Construct a DBpedia URI directly and verify it exists."""
@@ -159,11 +261,12 @@ class EntityLinker:
             pass
         return None
 
-    def _clean_entity(self, text: str) -> str:
+    def _clean_entity(self, text: str, keep_parens: bool = False) -> str:
         """Remove leading determiners, possessives, parentheticals, extra whitespace."""
         text = text.strip()
-        # Remove parenthetical expressions
-        text = re.sub(r"\s*\([^)]*\)", "", text)
+        if not keep_parens:
+            # Remove parenthetical expressions
+            text = re.sub(r"\s*\([^)]*\)", "", text)
         # Remove possessives
         text = re.sub(r"'s\b", "", text)
         # Remove trailing punctuation

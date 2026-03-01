@@ -197,10 +197,15 @@ class FactChecker:
             })
         result["kb_evidence"] = kb_results
 
-        # Step 4: Neural classification
+        # Step 4: Neural classification (input = triplets, not raw claim)
+        triplet_text = ". ".join(
+            f"{s} {p} {o}" for s, p, o in triplets
+        ) if triplets else ""
         evidence_text = self._build_evidence_text(kb_results, entity_uris)
+        if not evidence_text and not kb_results:
+            evidence_text = "No direct relation found in DBpedia"
         if self.classifier:
-            neural_result = self.classifier.predict(claim, evidence_text)
+            neural_result = self.classifier.predict(triplet_text, evidence_text)
             result["neural_prediction"] = neural_result
 
         # Step 5: GAN discriminator scoring
@@ -272,8 +277,12 @@ class FactChecker:
                     f"DBpedia confirms {subj} is related to {obj} via {dbo_preds}"
                 )
             else:
+                # Only include property-based evidence if a genuine
+                # contradiction is detected; otherwise use neutral text
+                # so BERT doesn't falsely predict REFUTED.
+                contradiction = self._check_property_contradiction([kr])
                 subj_uri = kr.get("subject_uri")
-                if subj_uri:
+                if contradiction is True and subj_uri:
                     props = self.kb.get_entity_properties(subj_uri)
                     if props:
                         prop_parts = []
@@ -288,28 +297,67 @@ class FactChecker:
                         parts.append(
                             f"No direct relation found between {subj} and {obj} in DBpedia"
                         )
+                elif contradiction is False:
+                    # Properties exist and match the claim — build positive evidence
+                    subj_uri = kr.get("subject_uri")
+                    props = self.kb.get_entity_properties(subj_uri) if subj_uri else {}
+                    prop_parts = []
+                    for prop_name, values in list(props.items())[:3]:
+                        val_str = ", ".join(values[:2])
+                        prop_parts.append(f"{subj} {prop_name} is {val_str}")
+                    if prop_parts:
+                        parts.append(
+                            f"DBpedia confirms {subj} is related to {obj}. "
+                            + ". ".join(prop_parts)
+                        )
+                    else:
+                        parts.append(
+                            f"DBpedia confirms {subj} is related to {obj}"
+                        )
                 else:
+                    # No contradiction determined — use neutral NEI-style evidence
+                    # (including properties here would make the model predict REFUTED)
                     parts.append(
                         f"No direct relation found between {subj} and {obj} in DBpedia"
                     )
-        return ". ".join(parts) if parts else ""
+        return ". ".join(p for p in parts if p) if parts else ""
 
-    # Mapping from claim predicates to DBpedia property names for contradiction detection
+    # Mapping from claim predicates to DBpedia property names for evidence lookup
     _PREDICATE_TO_PROPERTY = {
         "born in": "birthPlace",
         "was born in": "birthPlace",
         "born": "birthPlace",
         "capital": "capital",
+        "capital of": "capital",
         "located in": "location",
         "is located in": "location",
         "country": "country",
-        "be": "country",  # for "X is the capital of Y" patterns
+        "be": None,  # wildcard: search all key properties
+        "is": None,
+        "play for": "team",
+        "played for": "team",
+        "member of": "team",
+        "directed": "director",
+        "wrote": "author",
+        "written by": "author",
+        "language": "officialLanguage",
+        "speak": "officialLanguage",
+        "died in": "deathPlace",
+        "known for": "knownFor",
+        "nationality": "nationality",
+        "genre": "genre",
+        "occupation": "occupation",
+        "continent": "continent",
     }
 
     def _check_property_contradiction(
         self, kb_results: list[dict]
     ) -> bool | None:
         """Check if subject properties contradict the claimed object.
+
+        Only checks properties relevant to the claim's predicate (via
+        _PREDICATE_TO_PROPERTY mapping). If the predicate doesn't map to a
+        known property, returns None (unknown, not a contradiction).
 
         Returns True if a contradiction is found, False if properties support
         the claim, None if no relevant properties available.
@@ -326,26 +374,59 @@ class FactChecker:
             predicate = triplet[1]
             obj_text = triplet[2].lower()
 
-            # Get the subject's properties
-            props = self.kb.get_entity_properties(subj_uri)
-            if not props:
+            # Only check contradiction for known predicate→property mappings
+            if predicate not in self._PREDICATE_TO_PROPERTY:
                 continue
+            relevant_prop = self._PREDICATE_TO_PROPERTY[predicate]  # may be None (wildcard)
 
-            # Check if any property values match or contradict the claimed object
-            for prop_name, values in props.items():
-                for value in values:
+            # Check both subject and object properties for the relevant predicate
+            # E.g. "Paris is the capital of Germany" → check Germany's capital too
+            subj_text = triplet[0].lower()
+            uris_to_check = [(subj_uri, obj_text, obj_uri)]
+            if obj_uri:
+                uris_to_check.append((obj_uri, subj_text, subj_uri))
+
+            for entity_uri, claimed_text, claimed_uri in uris_to_check:
+                props = self.kb.get_entity_properties(entity_uri)
+                if not props:
+                    continue
+
+                if relevant_prop is None:
+                    # Wildcard: search ALL properties for a match
+                    for prop_name, values in props.items():
+                        for value in values:
+                            value_lower = value.lower()
+                            if claimed_text in value_lower or value_lower in claimed_text:
+                                return False
+                            if claimed_uri:
+                                name = claimed_uri.split("/")[-1].replace("_", " ").lower()
+                                if name in value_lower or value_lower in name:
+                                    return False
+                    # Properties exist but none match → contradiction
+                    return True
+
+                # Specific property: check the relevant property
+                relevant_values = props.get(relevant_prop, [])
+                if not relevant_values:
+                    for prop_name, values in props.items():
+                        if relevant_prop.lower() in prop_name.lower():
+                            relevant_values = values
+                            break
+
+                if not relevant_values:
+                    continue
+
+                for value in relevant_values:
                     value_lower = value.lower()
-                    # If the property value contains the claimed object → no contradiction
-                    if obj_text in value_lower or value_lower in obj_text:
+                    if claimed_text in value_lower or value_lower in claimed_text:
                         return False
-                    # If the object URI name is in the value → no contradiction
-                    if obj_uri:
-                        obj_name = obj_uri.split("/")[-1].replace("_", " ").lower()
-                        if obj_name in value_lower or value_lower in obj_name:
+                    if claimed_uri:
+                        name = claimed_uri.split("/")[-1].replace("_", " ").lower()
+                        if name in value_lower or value_lower in name:
                             return False
 
-            # We have properties but none match the claimed object → contradiction
-            return True
+                # Relevant property exists with different value → contradiction
+                return True
 
         return None
 
@@ -362,6 +443,7 @@ class FactChecker:
         overrides the neural label.
         """
         kb_found = any(kr["found"] for kr in kb_results) if kb_results else False
+        contradiction = self._check_property_contradiction(kb_results)
 
         # No neural model: fall back to KB-only
         if not neural_prediction:
@@ -372,15 +454,20 @@ class FactChecker:
         neural_label = neural_prediction["label"]
         neural_conf = neural_prediction["confidence"]
 
+        # KB found relation but neural says REFUTED and properties don't
+        # contradict → KB relation may be relevant, reduce confidence
+        if kb_found and neural_label == "REFUTED" and contradiction is not True:
+            confidence = neural_conf * 0.6
+            return neural_label, confidence
+
         # KB agreement boost / disagreement penalty
         if kb_found and neural_label == "SUPPORTED":
             confidence = min(0.95, neural_conf * 1.2)
-        elif kb_found and neural_label == "REFUTED":
-            confidence = neural_conf * 0.8
+        elif kb_found and neural_label == "REFUTED" and contradiction is True:
+            # KB + property contradiction → strong REFUTED signal
+            confidence = min(0.95, neural_conf * 1.2)
         elif not kb_found and neural_label == "SUPPORTED":
             confidence = neural_conf * 0.7
-        elif not kb_found and neural_label == "REFUTED":
-            confidence = min(0.95, neural_conf * 1.1)
         else:
             confidence = neural_conf
 

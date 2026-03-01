@@ -148,7 +148,6 @@ class KBReasoningExplainer:
             - ``steps`` : list[str] -- ordered reasoning steps.
             - ``summary`` : str -- one-paragraph summary of the KB reasoning.
         """
-        claim: str = fact_check_result.get("claim", "")
         triplets: list[tuple[str, str, str]] = fact_check_result.get("triplets", [])
         kb_evidence: list[dict] = fact_check_result.get("kb_evidence", [])
         entities: dict[str, str] = fact_check_result.get("entities", {})
@@ -158,8 +157,7 @@ class KBReasoningExplainer:
 
         if not triplets:
             steps.append(
-                f"Could not extract any (subject, predicate, object) "
-                f"triplets from the claim: \"{claim}\"."
+                "Could not extract any (subject, predicate, object) triplets."
             )
             return {
                 "steps": steps,
@@ -248,7 +246,8 @@ class KBReasoningExplainer:
                 )
 
         # Build summary
-        summary = self._build_summary(claim, kb_evidence, verdict)
+        triplet_desc = "; ".join(f"({s}, {p}, {o})" for s, p, o in triplets) if triplets else "no triplets"
+        summary = self._build_summary(triplet_desc, kb_evidence, verdict)
         return {"steps": steps, "summary": summary}
 
     # ----- helpers -------------------------------------------------------
@@ -292,7 +291,7 @@ class KBReasoningExplainer:
 
     @staticmethod
     def _build_summary(
-        claim: str,
+        triplet_desc: str,
         kb_evidence: list[dict],
         verdict: str,
     ) -> str:
@@ -303,25 +302,25 @@ class KBReasoningExplainer:
         if total == 0:
             return (
                 f"No triplets could be verified against the knowledge base "
-                f"for the claim \"{claim}\"."
+                f"for triplets: {triplet_desc}."
             )
 
         if found_count == total:
             return (
-                f"All {total} extracted relation(s) from the claim "
-                f"\"{claim}\" were confirmed by DBpedia. "
+                f"All {total} extracted relation(s) [{triplet_desc}] "
+                f"were confirmed by DBpedia. "
                 f"The knowledge base evidence supports a verdict of {verdict}."
             )
         elif found_count > 0:
             return (
                 f"Out of {total} extracted relation(s), {found_count} "
-                f"were confirmed by DBpedia for the claim \"{claim}\". "
+                f"were confirmed by DBpedia for [{triplet_desc}]. "
                 f"Partial evidence was found, leading to a verdict of {verdict}."
             )
         else:
             return (
-                f"None of the {total} extracted relation(s) from the claim "
-                f"\"{claim}\" could be confirmed by DBpedia. "
+                f"None of the {total} extracted relation(s) [{triplet_desc}] "
+                f"could be confirmed by DBpedia. "
                 f"The lack of supporting evidence contributes to a verdict "
                 f"of {verdict}."
             )
@@ -385,7 +384,7 @@ class T5ExplanationGenerator:
 
     def generate(
         self,
-        claim: str,
+        triplet_text: str,
         verdict: str,
         evidence: str,
         max_length: int = 150,
@@ -395,8 +394,8 @@ class T5ExplanationGenerator:
 
         Parameters
         ----------
-        claim : str
-            The original claim text.
+        triplet_text : str
+            Formatted triplet string (e.g. "Paris be capital of France").
         verdict : str
             The verdict label (e.g., ``"SUPPORTED"``).
         evidence : str
@@ -412,7 +411,7 @@ class T5ExplanationGenerator:
             A generated explanation paragraph.
         """
         input_text = (
-            f"explain: claim: {claim} [SEP] verdict: {verdict} "
+            f"explain: triplet: {triplet_text} [SEP] verdict: {verdict} "
             f"[SEP] evidence: {evidence}"
         )
 
@@ -454,18 +453,18 @@ class AttentionAnalyzer:
 
     def analyze(
         self,
-        claim: str,
+        triplet_text: str,
         evidence: str,
         model: Any,
         tokenizer: Any,
         top_n: int = 10,
     ) -> dict[str, Any]:
-        """Run attention analysis on a claim+evidence pair.
+        """Run attention analysis on a triplet+evidence pair.
 
         Parameters
         ----------
-        claim : str
-            The claim text.
+        triplet_text : str
+            Formatted triplet string.
         evidence : str
             The evidence text.
         model : BertForSequenceClassification
@@ -493,7 +492,7 @@ class AttentionAnalyzer:
                 "all_token_scores": [],
             }
 
-        text = f"{claim} [SEP] {evidence}" if evidence else claim
+        text = f"{triplet_text} [SEP] {evidence}" if evidence else triplet_text
 
         inputs = tokenizer(
             text,
@@ -824,11 +823,12 @@ class FactExplainer:
         natural_explanation: Optional[str] = None
         if self.t5_generator is not None:
             try:
-                claim = fact_check_result.get("claim", "")
+                triplets = fact_check_result.get("triplets", [])
+                triplet_text = ". ".join(f"{s} {p} {o}" for s, p, o in triplets) if triplets else ""
                 verdict = fact_check_result.get("verdict", "NOT ENOUGH INFO")
                 evidence_text = self._build_evidence_text(fact_check_result)
                 natural_explanation = self.t5_generator.generate(
-                    claim=claim,
+                    triplet_text=triplet_text,
                     verdict=verdict,
                     evidence=evidence_text,
                 )
@@ -840,12 +840,13 @@ class FactExplainer:
         attention_analysis: Optional[dict[str, Any]] = None
         if self.attention_analyzer is not None and classifier is not None:
             try:
-                claim = fact_check_result.get("claim", "")
+                triplets = fact_check_result.get("triplets", [])
+                triplet_text = ". ".join(f"{s} {p} {o}" for s, p, o in triplets) if triplets else ""
                 evidence_text = self._build_evidence_text(fact_check_result)
                 model = getattr(classifier, "model", None)
                 tokenizer = getattr(classifier, "tokenizer", None)
                 attention_analysis = self.attention_analyzer.analyze(
-                    claim=claim,
+                    triplet_text=triplet_text,
                     evidence=evidence_text,
                     model=model,
                     tokenizer=tokenizer,
@@ -981,14 +982,15 @@ class FactExplainer:
         confidence_breakdown: dict,
     ) -> str:
         """Build a single-paragraph summary combining all explanation layers."""
-        claim = fact_check_result.get("claim", "")
+        triplets = fact_check_result.get("triplets", [])
+        triplet_desc = "; ".join(f"({s}, {p}, {o})" for s, p, o in triplets) if triplets else "no triplets"
         verdict = fact_check_result.get("verdict", "NOT ENOUGH INFO")
         confidence = fact_check_result.get("confidence", 0.0)
 
         parts: list[str] = []
 
         parts.append(
-            f"The claim \"{claim}\" was judged as {verdict} "
+            f"Triplets [{triplet_desc}] judged as {verdict} "
             f"with {confidence:.0%} confidence."
         )
 

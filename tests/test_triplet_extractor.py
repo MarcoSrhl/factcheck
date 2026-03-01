@@ -16,7 +16,7 @@ class TestTripletExtractor:
         assert len(triplets) >= 1
         s, p, o = triplets[0]
         assert "Paris" in s
-        assert "capital" in o
+        assert "capital" in p
         assert "France" in o
 
     def test_passive_verbal(self, extractor):

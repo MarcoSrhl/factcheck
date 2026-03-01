@@ -154,23 +154,29 @@ class KnowledgeQuery:
     def get_entity_properties(self, entity_uri: str) -> dict[str, list[str]]:
         """Fetch key properties of an entity for evidence building.
 
-        Uses the JSON API (faster than SPARQL) to retrieve entity data,
-        then filters for key predicates.
+        Tries JSON API first (faster), falls back to SPARQL if JSON fails.
         Returns a dict mapping human-readable property names to their values.
         """
         if not entity_uri:
             return {}
 
-        # Use JSON API for speed (avoids SPARQL timeouts)
+        # Try JSON API first (faster)
+        properties = self._get_properties_json(entity_uri)
+        if properties:
+            return properties
+
+        # Fallback to SPARQL (handles JSON API 500 errors)
+        return self._get_properties_sparql(entity_uri)
+
+    def _get_properties_json(self, entity_uri: str) -> dict[str, list[str]]:
+        """Fetch properties via JSON API."""
         data = self.json_get_entity_data(entity_uri)
         subject_data = data.get(entity_uri, {})
 
         if not subject_data:
             return {}
 
-        # Build a set of key predicate URIs for fast lookup
         key_pred_set = set(self._KEY_PREDICATES)
-
         properties: dict[str, list[str]] = {}
         for pred_uri, objects in subject_data.items():
             if pred_uri not in key_pred_set:
@@ -179,7 +185,7 @@ class KnowledgeQuery:
             pred_name = pred_uri.split("/")[-1].split("#")[-1]
             readable_values = []
             for obj in objects[:3]:
-                value = obj.get("value", "")
+                value = str(obj.get("value", ""))
                 if not value:
                     continue
                 if value.startswith("http://dbpedia.org/resource/"):
@@ -192,6 +198,26 @@ class KnowledgeQuery:
 
         return properties
 
+    def _get_properties_sparql(self, entity_uri: str) -> dict[str, list[str]]:
+        """Fetch properties via SPARQL (fallback when JSON API fails)."""
+        properties: dict[str, list[str]] = {}
+        for pred_uri in self._KEY_PREDICATES:
+            if pred_uri.endswith("comment"):
+                continue  # Skip rdfs:comment (too heavy for SPARQL)
+            values = self.sparql_get_property(entity_uri, pred_uri)
+            if values:
+                pred_name = pred_uri.split("/")[-1].split("#")[-1]
+                readable = []
+                for v in values[:3]:
+                    v = str(v)
+                    if v.startswith("http://dbpedia.org/resource/"):
+                        readable.append(v.split("/")[-1].replace("_", " "))
+                    elif len(v) < 200:
+                        readable.append(v)
+                if readable:
+                    properties[pred_name] = readable
+        return properties
+
     # --- High-level verification ---
 
     def verify_triplet(
@@ -199,25 +225,36 @@ class KnowledgeQuery:
     ) -> dict:
         """Verify whether a relation exists between two entities.
 
+        Checks both directions: <subject> ?p <object> and <object> ?p <subject>.
+
         Returns a dict with:
           - found: bool
           - predicates: list of matching predicate URIs
           - method: 'sparql', 'json', or 'none'
+          - direction: 'forward', 'reverse', or 'none'
         """
         if not subject_uri or not object_uri:
-            return {"found": False, "predicates": [], "method": "none"}
+            return {"found": False, "predicates": [], "method": "none", "direction": "none"}
 
-        # Try SPARQL first
+        # Forward: <subject> ?p <object>
         predicates = self.sparql_check_relation(subject_uri, object_uri)
         if predicates:
-            return {"found": True, "predicates": predicates, "method": "sparql"}
+            return {"found": True, "predicates": predicates, "method": "sparql", "direction": "forward"}
 
-        # Fallback to JSON API
         predicates = self.json_check_relation(subject_uri, object_uri)
         if predicates:
-            return {"found": True, "predicates": predicates, "method": "json"}
+            return {"found": True, "predicates": predicates, "method": "json", "direction": "forward"}
 
-        return {"found": False, "predicates": [], "method": "none"}
+        # Reverse: <object> ?p <subject>
+        predicates = self.sparql_check_relation(object_uri, subject_uri)
+        if predicates:
+            return {"found": True, "predicates": predicates, "method": "sparql", "direction": "reverse"}
+
+        predicates = self.json_check_relation(object_uri, subject_uri)
+        if predicates:
+            return {"found": True, "predicates": predicates, "method": "json", "direction": "reverse"}
+
+        return {"found": False, "predicates": [], "method": "none", "direction": "none"}
 
 
 if __name__ == "__main__":

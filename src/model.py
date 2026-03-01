@@ -35,13 +35,17 @@ class FactClassifier:
         self.model.to(self.device)
         self.model.eval()
 
-    def predict(self, claim: str, evidence: str = "") -> dict:
-        """Predict the label for a claim given optional evidence.
+    def predict(self, triplet_text: str, evidence: str = "") -> dict:
+        """Predict the label for a triplet given optional evidence.
+
+        Args:
+            triplet_text: Formatted triplet string (e.g. "Paris be capital of France")
+            evidence: Evidence text from KB queries
 
         Returns dict with 'label', 'confidence', and 'probabilities'.
         """
         inputs = self.tokenizer(
-            claim,
+            triplet_text,
             evidence if evidence else None,
             return_tensors="pt",
             truncation=True,
@@ -66,15 +70,15 @@ class FactClassifier:
             },
         }
 
-    def predict_batch(self, claims: list[str], evidences: list[str] | None = None) -> list[dict]:
-        """Predict labels for a batch of claims."""
+    def predict_batch(self, triplet_texts: list[str], evidences: list[str] | None = None) -> list[dict]:
+        """Predict labels for a batch of triplets."""
         if evidences is None:
-            evidences = [None] * len(claims)
+            evidences = [None] * len(triplet_texts)
         else:
             evidences = [e if e else None for e in evidences]
 
         inputs = self.tokenizer(
-            claims,
+            triplet_texts,
             evidences,
             return_tensors="pt",
             truncation=True,
@@ -89,7 +93,7 @@ class FactClassifier:
             probs = torch.softmax(logits, dim=-1)
 
         results = []
-        for i in range(len(texts)):
+        for i in range(len(triplet_texts)):
             predicted_id = torch.argmax(probs[i]).item()
             results.append({
                 "label": LABEL_MAP[predicted_id],
