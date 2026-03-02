@@ -52,6 +52,11 @@ class GANTrainingConfig:
     dropout: float = 0.4
     warmup_ratio: float = 0.1
 
+    # Generator mode: "random" (default), "hard_negative", "reinforce"
+    generator_mode: str = "random"
+    hard_negative_k: int = 5
+    lr_g: float = 1e-3  # Learning rate for policy generator (reinforce only)
+
     # Early stopping
     patience: int = 3
     min_delta: float = 0.001
@@ -71,21 +76,29 @@ class EpochMetrics:
     d_loss: float = 0.0
     d_real_score: float = 0.0
     d_fake_score: float = 0.0
+    g_loss: float = 0.0
+    g_reward: float = 0.0
     num_steps: int = 0
 
     def update(self, step_metrics: dict) -> None:
         self.d_loss += step_metrics["d_loss"]
         self.d_real_score += step_metrics["d_real_score"]
         self.d_fake_score += step_metrics["d_fake_score"]
+        self.g_loss += step_metrics.get("g_loss", 0.0)
+        self.g_reward += step_metrics.get("g_reward", 0.0)
         self.num_steps += 1
 
     def average(self) -> dict[str, float]:
         n = max(self.num_steps, 1)
-        return {
+        avg: dict[str, float] = {
             "d_loss": self.d_loss / n,
             "d_real_score": self.d_real_score / n,
             "d_fake_score": self.d_fake_score / n,
         }
+        if self.g_loss != 0.0:
+            avg["g_loss"] = self.g_loss / n
+            avg["g_reward"] = self.g_reward / n
+        return avg
 
 
 @dataclass
@@ -124,6 +137,7 @@ class GANTrainer:
             device=self.config.device,
             freeze_bert_layers=self.config.freeze_bert_layers,
             dropout=self.config.dropout,
+            generator_mode=self.config.generator_mode,
         )
 
         # Only optimize trainable parameters (unfrozen BERT layers + classifier)
@@ -132,6 +146,14 @@ class GANTrainer:
             lr=self.config.lr_d,
             weight_decay=self.config.weight_decay,
         )
+
+        # REINFORCE mode: separate optimizer for the policy generator
+        self.optimizer_g: Optional[torch.optim.Optimizer] = None
+        if self.config.generator_mode == "reinforce" and self.gan.policy_generator is not None:
+            self.optimizer_g = torch.optim.Adam(
+                self.gan.policy_generator.parameters(),
+                lr=self.config.lr_g,
+            )
 
         self.history = TrainingHistory()
 
@@ -271,11 +293,27 @@ class GANTrainer:
                 if len(batch) < 2:
                     continue
 
-                step_metrics = self.gan.train_step(
-                    real_triplets=batch,
-                    optimizer_d=self.optimizer_d,
-                    label_smoothing=self.config.label_smoothing,
-                )
+                if self.config.generator_mode == "hard_negative":
+                    step_metrics = self.gan.train_step_hard_negative(
+                        real_triplets=batch,
+                        optimizer_d=self.optimizer_d,
+                        label_smoothing=self.config.label_smoothing,
+                        k=self.config.hard_negative_k,
+                    )
+                elif self.config.generator_mode == "reinforce":
+                    step_metrics = self.gan.train_step_reinforce(
+                        real_triplets=batch,
+                        optimizer_d=self.optimizer_d,
+                        optimizer_g=self.optimizer_g,
+                        label_smoothing=self.config.label_smoothing,
+                        k=self.config.hard_negative_k,
+                    )
+                else:
+                    step_metrics = self.gan.train_step(
+                        real_triplets=batch,
+                        optimizer_d=self.optimizer_d,
+                        label_smoothing=self.config.label_smoothing,
+                    )
                 scheduler.step()
                 epoch_metrics.update(step_metrics)
 
@@ -304,15 +342,21 @@ class GANTrainer:
                 fake_examples = step_metrics.get("fake_examples", [])
                 real_examples = batch[:3]
 
-                logger.info(
+                base_msg = (
                     "Epoch %3d/%d | D_loss: %.4f | D_real: %.3f | D_fake: %.3f | "
-                    "val_loss: %.4f | val_acc: %.3f | patience: %d/%d | elapsed: %.1fs",
+                    "val_loss: %.4f | val_acc: %.3f | patience: %d/%d | elapsed: %.1fs"
+                )
+                base_args = [
                     epoch, num_epochs,
                     avg["d_loss"], avg["d_real_score"], avg["d_fake_score"],
                     val_loss, val_metrics["val_accuracy"],
                     epochs_without_improvement, self.config.patience,
                     elapsed,
-                )
+                ]
+                if "g_loss" in avg:
+                    base_msg += " | G_loss: %.4f | G_reward: %.3f"
+                    base_args.extend([avg["g_loss"], avg["g_reward"]])
+                logger.info(base_msg, *base_args)
                 for real, fake in zip(real_examples, fake_examples):
                     logger.info("  REAL: %s | %s | %s", *real)
                     logger.info("  FAKE: %s | %s | %s", *fake)
@@ -368,6 +412,8 @@ def _push_gan_to_mlflow(output_dir: str, metrics: dict, config: GANTrainingConfi
             "lr_d": config.lr_d,
             "epochs": config.epochs,
             "batch_size": config.batch_size,
+            "generator_mode": config.generator_mode,
+            "hard_negative_k": config.hard_negative_k,
         })
         if metrics:
             safe = {k: v for k, v in metrics.items() if isinstance(v, (int, float))}
@@ -386,6 +432,11 @@ def main() -> None:
     parser.add_argument("--patience", type=int, default=3, help="Early stopping patience (epochs)")
     parser.add_argument("--freeze-bert-layers", type=int, default=10, help="Freeze first N BERT encoder layers (of 12)")
     parser.add_argument("--dropout", type=float, default=0.4, help="Dropout rate for classifier head")
+    parser.add_argument("--generator-mode", type=str, default="random",
+                        choices=["random", "hard_negative", "reinforce"],
+                        help="Generator strategy: random (default), hard_negative, reinforce")
+    parser.add_argument("--hard-negative-k", type=int, default=5, help="Number of candidates for hard_negative/reinforce")
+    parser.add_argument("--lr-g", type=float, default=1e-3, help="Learning rate for policy generator (reinforce only)")
     parser.add_argument("--save-to-db", action="store_true")
     parser.add_argument("--push-to-mlflow", action="store_true")
     args = parser.parse_args()
@@ -404,6 +455,9 @@ def main() -> None:
         patience=args.patience,
         freeze_bert_layers=args.freeze_bert_layers,
         dropout=args.dropout,
+        generator_mode=args.generator_mode,
+        hard_negative_k=args.hard_negative_k,
+        lr_g=args.lr_g,
     )
 
     # Fetch here so we can save to DB before training
@@ -430,8 +484,10 @@ def main() -> None:
                     "batch_size": config.batch_size,
                     "lr_d": config.lr_d,
                     "num_triplets": len(triplets),
+                    "generator_mode": config.generator_mode,
+                    "hard_negative_k": config.hard_negative_k,
                 },
-                notes="BERT GAN with entity-swap generator",
+                notes=f"BERT GAN with {config.generator_mode} generator",
             )
             print(f"DB run_id: {db_run_id}")
 
