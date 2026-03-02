@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
+from transformers import get_cosine_schedule_with_warmup
 
 from factcheck.gan_model import FactGAN
 from factcheck.sparql_queries import fetch_mixed_triplets
@@ -45,6 +46,11 @@ class GANTrainingConfig:
     # Data
     triplets_per_category: int = 5000
     categories: Optional[list[str]] = None
+
+    # Regularization
+    freeze_bert_layers: int = 10
+    dropout: float = 0.4
+    warmup_ratio: float = 0.1
 
     # Early stopping
     patience: int = 3
@@ -116,10 +122,13 @@ class GANTrainer:
         self.gan = FactGAN(
             triplets=triplets,
             device=self.config.device,
+            freeze_bert_layers=self.config.freeze_bert_layers,
+            dropout=self.config.dropout,
         )
 
+        # Only optimize trainable parameters (unfrozen BERT layers + classifier)
         self.optimizer_d = torch.optim.AdamW(
-            self.gan.discriminator.parameters(),
+            filter(lambda p: p.requires_grad, self.gan.discriminator.parameters()),
             lr=self.config.lr_d,
             weight_decay=self.config.weight_decay,
         )
@@ -212,15 +221,37 @@ class GANTrainer:
 
         num_batches = math.ceil(len(train_triplets) / batch_size)
 
+        # Count trainable vs frozen parameters
+        trainable = sum(p.numel() for p in self.gan.discriminator.parameters() if p.requires_grad)
+        frozen = sum(p.numel() for p in self.gan.discriminator.parameters() if not p.requires_grad)
+
         logger.info(
             "Starting training: %d epochs, %d batches/epoch, "
             "batch_size=%d, %d train / %d val triplets, "
-            "early_stopping patience=%d",
+            "early_stopping patience=%d, frozen_layers=%d, dropout=%.2f",
             num_epochs, num_batches, batch_size,
             len(train_triplets), len(val_triplets),
-            self.config.patience,
+            self.config.patience, self.config.freeze_bert_layers,
+            self.config.dropout,
+        )
+        logger.info(
+            "Parameters: %d trainable, %d frozen (%.1f%% frozen)",
+            trainable, frozen, 100.0 * frozen / (trainable + frozen),
         )
         t_start = time.time()
+
+        # LR scheduler: warmup + cosine decay
+        total_steps = num_batches * num_epochs
+        warmup_steps = int(total_steps * self.config.warmup_ratio)
+        scheduler = get_cosine_schedule_with_warmup(
+            self.optimizer_d,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps,
+        )
+        logger.info(
+            "LR scheduler: cosine with %d warmup steps / %d total steps",
+            warmup_steps, total_steps,
+        )
 
         best_val_loss = float("inf")
         epochs_without_improvement = 0
@@ -245,6 +276,7 @@ class GANTrainer:
                     optimizer_d=self.optimizer_d,
                     label_smoothing=self.config.label_smoothing,
                 )
+                scheduler.step()
                 epoch_metrics.update(step_metrics)
 
             avg = epoch_metrics.average()
@@ -352,6 +384,8 @@ def main() -> None:
     parser.add_argument("--output", type=str, default="models/gan")
     parser.add_argument("--per-category", type=int, default=5000)
     parser.add_argument("--patience", type=int, default=3, help="Early stopping patience (epochs)")
+    parser.add_argument("--freeze-bert-layers", type=int, default=10, help="Freeze first N BERT encoder layers (of 12)")
+    parser.add_argument("--dropout", type=float, default=0.4, help="Dropout rate for classifier head")
     parser.add_argument("--save-to-db", action="store_true")
     parser.add_argument("--push-to-mlflow", action="store_true")
     args = parser.parse_args()
@@ -368,6 +402,8 @@ def main() -> None:
         output_dir=args.output,
         triplets_per_category=args.per_category,
         patience=args.patience,
+        freeze_bert_layers=args.freeze_bert_layers,
+        dropout=args.dropout,
     )
 
     # Fetch here so we can save to DB before training

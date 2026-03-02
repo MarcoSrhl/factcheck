@@ -456,43 +456,68 @@ class FactChecker:
         neural_prediction: Optional[dict] = None,
         gan_score: Optional[float] = None,
     ) -> tuple[str, float]:
-        """Combine KB evidence and neural prediction into a final verdict.
+        """Combine GAN score, KB evidence, and neural prediction into a verdict.
 
-        Strategy: the neural classifier is the primary signal. KB evidence
-        adjusts confidence up (agreement) or down (disagreement) but never
-        overrides the neural label.
+        Strategy: the GAN discriminator is the primary signal (it already
+        contains a fine-tuned BERT).  KB evidence adjusts confidence.
+        The standalone BERT classifier acts as a secondary tiebreaker.
         """
         kb_found = any(kr["found"] for kr in kb_results) if kb_results else False
         contradiction = self._check_property_contradiction(kb_results)
 
-        # No neural model: fall back to KB-only
-        if not neural_prediction:
-            if kb_found:
-                return "SUPPORTED", 0.6
-            return "NOT ENOUGH INFO", 0.3
+        # --- Primary signal: GAN discriminator ---
+        if gan_score is not None:
+            if gan_score >= 0.7:
+                verdict = "SUPPORTED"
+                confidence = gan_score
+            elif gan_score <= 0.3:
+                verdict = "REFUTED"
+                confidence = 1.0 - gan_score
+            else:
+                verdict = "NOT ENOUGH INFO"
+                confidence = 0.5
 
-        neural_label = neural_prediction["label"]
-        neural_conf = neural_prediction["confidence"]
+            # KB evidence adjusts confidence
+            if kb_found and verdict == "SUPPORTED":
+                confidence = min(0.99, confidence * 1.15)
+            elif kb_found and verdict == "REFUTED" and contradiction is not True:
+                # KB has a link but GAN says fake — reduce confidence
+                confidence *= 0.7
+            elif not kb_found and verdict == "SUPPORTED":
+                confidence *= 0.8
+            elif not kb_found and verdict == "REFUTED" and contradiction is True:
+                confidence = min(0.99, confidence * 1.15)
 
-        # KB found relation but neural says REFUTED and properties don't
-        # contradict → KB relation may be relevant, reduce confidence
-        if kb_found and neural_label == "REFUTED" and contradiction is not True:
-            confidence = neural_conf * 0.6
+            # BERT classifier as tiebreaker in ambiguous zone
+            if verdict == "NOT ENOUGH INFO" and neural_prediction:
+                neural_label = neural_prediction["label"]
+                neural_conf = neural_prediction["confidence"]
+                if neural_conf > 0.7:
+                    verdict = neural_label
+                    confidence = neural_conf * 0.8
+
+            confidence = min(0.99, max(0.1, confidence))
+            return verdict, confidence
+
+        # --- Fallback: no GAN available, use BERT classifier ---
+        if neural_prediction:
+            neural_label = neural_prediction["label"]
+            neural_conf = neural_prediction["confidence"]
+
+            if kb_found and neural_label == "SUPPORTED":
+                confidence = min(0.95, neural_conf * 1.2)
+            elif not kb_found and neural_label == "SUPPORTED":
+                confidence = neural_conf * 0.7
+            else:
+                confidence = neural_conf
+
+            confidence = min(0.99, max(0.1, confidence))
             return neural_label, confidence
 
-        # KB agreement boost / disagreement penalty
-        if kb_found and neural_label == "SUPPORTED":
-            confidence = min(0.95, neural_conf * 1.2)
-        elif kb_found and neural_label == "REFUTED" and contradiction is True:
-            # KB + property contradiction → strong REFUTED signal
-            confidence = min(0.95, neural_conf * 1.2)
-        elif not kb_found and neural_label == "SUPPORTED":
-            confidence = neural_conf * 0.7
-        else:
-            confidence = neural_conf
-
-        confidence = min(0.99, max(0.1, confidence))
-        return neural_label, confidence
+        # --- Last resort: KB-only ---
+        if kb_found:
+            return "SUPPORTED", 0.6
+        return "NOT ENOUGH INFO", 0.3
 
     def check_batch(self, claims: list[str]) -> list[dict]:
         """Check multiple claims."""

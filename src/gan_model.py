@@ -113,6 +113,8 @@ class BERTDiscriminator(nn.Module):
         self,
         model_name: str = BERT_MODEL_NAME,
         device: Optional[torch.device] = None,
+        freeze_bert_layers: int = 10,
+        dropout: float = 0.4,
     ) -> None:
         super().__init__()
         self._device = device or _detect_device()
@@ -120,10 +122,19 @@ class BERTDiscriminator(nn.Module):
         self.bert = BertModel.from_pretrained(model_name)
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
 
+        # Freeze embeddings + first N encoder layers (BERT has 12 layers)
+        if freeze_bert_layers > 0:
+            for param in self.bert.embeddings.parameters():
+                param.requires_grad = False
+            for layer in self.bert.encoder.layer[:freeze_bert_layers]:
+                for param in layer.parameters():
+                    param.requires_grad = False
+
+        self.cls_dropout = nn.Dropout(dropout)
         self.classifier = nn.Sequential(
             nn.Linear(BERT_HIDDEN_SIZE, 256),
             nn.LeakyReLU(0.2),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout),
             nn.Linear(256, 1),
             nn.Sigmoid(),
         )
@@ -138,6 +149,7 @@ class BERTDiscriminator(nn.Module):
         """Score triplets. Returns (batch, 1) in [0, 1]."""
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
         cls_hidden = outputs.last_hidden_state[:, 0, :]  # [CLS]
+        cls_hidden = self.cls_dropout(cls_hidden)
         return self.classifier(cls_hidden)
 
     def encode_triplets(
@@ -178,6 +190,8 @@ class FactGAN:
         triplets: list[tuple[str, str, str]] | None = None,
         model_name: str = BERT_MODEL_NAME,
         device: Optional[str] = None,
+        freeze_bert_layers: int = 10,
+        dropout: float = 0.4,
     ) -> None:
         self.device = torch.device(device) if device else _detect_device()
 
@@ -185,6 +199,8 @@ class FactGAN:
         self.discriminator = BERTDiscriminator(
             model_name=model_name,
             device=self.device,
+            freeze_bert_layers=freeze_bert_layers,
+            dropout=dropout,
         )
 
         self.criterion = nn.BCELoss()

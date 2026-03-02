@@ -741,6 +741,38 @@ def fetch_chairmans(limit: int = 500) -> list[tuple[str, str, str]]:
     ]
 
 
+def fetch_publishers(limit: int = 500) -> list[tuple[str, str, str]]:
+    """Fetch (work, 'was published by', publisher) triplets."""
+    query = f"""
+    SELECT DISTINCT ?work ?publisher WHERE {{
+        ?work dbo:publisher ?publisher .
+        ?work a dbo:Work .
+    }}
+    LIMIT {limit}
+    """
+    rows = _run_query(query, ["work", "publisher"])
+    return [
+        (_uri_to_label(work), "was published by", _uri_to_label(pub))
+        for work, pub in rows
+    ]
+
+
+def fetch_sports_leagues(limit: int = 500) -> list[tuple[str, str, str]]:
+    """Fetch (team, 'plays in', league) triplets."""
+    query = f"""
+    SELECT DISTINCT ?team ?league WHERE {{
+        ?team dbo:league ?league .
+        ?team a dbo:SportsTeam .
+    }}
+    LIMIT {limit}
+    """
+    rows = _run_query(query, ["team", "league"])
+    return [
+        (_uri_to_label(team), "plays in", _uri_to_label(league))
+        for team, league in rows
+    ]
+
+
 # =========================================================================
 # Aggregation helpers
 # =========================================================================
@@ -789,6 +821,9 @@ QUERY_REGISTRY: dict[str, Callable[[int], list[tuple[str, str, str]]]] = {
     "distributors": fetch_distributors,
     "owners": fetch_owners,
     "chairmans": fetch_chairmans,
+    # Additional categories (2)
+    "publishers": fetch_publishers,
+    "sports_leagues": fetch_sports_leagues,
 }
 
 

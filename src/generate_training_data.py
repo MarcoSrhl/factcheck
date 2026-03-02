@@ -191,6 +191,14 @@ CLAIM_TEMPLATES: dict[str, list[str]] = {
         "{subject} has {object} as chairman",
         "{object} is the chairman of {subject}",
     ],
+    "was published by": [
+        "{subject} was published by {object}",
+        "{object} published {subject}",
+    ],
+    "plays in": [
+        "{subject} plays in {object}",
+        "{subject} competes in {object}",
+    ],
 }
 
 # Evidence templates per predicate
@@ -318,6 +326,12 @@ EVIDENCE_TEMPLATES: dict[str, list[str]] = {
     "has chairman": [
         "DBpedia confirms {subject} is related to {object} via dbo:chairman",
     ],
+    "was published by": [
+        "DBpedia confirms {subject} is related to {object} via dbo:publisher",
+    ],
+    "plays in": [
+        "DBpedia confirms {subject} is related to {object} via dbo:league",
+    ],
 }
 
 # T5 explanation templates per verdict
@@ -388,6 +402,8 @@ PRED_TO_SHORT: dict[str, str] = {
     "is distributed by": "dbo:distributor",
     "is owned by": "dbo:owner",
     "has chairman": "dbo:chairman",
+    "was published by": "dbo:publisher",
+    "plays in": "dbo:league",
 }
 
 
