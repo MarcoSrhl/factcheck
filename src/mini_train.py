@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.train import train
-from src.database import NeonDB
-from src.push_to_mlflow import push
+from factcheck.train import train
+from factcheck.database import NeonDB
+from factcheck.push_to_mlflow import push
 
 logging.basicConfig(
     level=logging.INFO,

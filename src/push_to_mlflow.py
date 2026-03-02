@@ -17,7 +17,7 @@ import torch
 import transformers
 from transformers import BertForSequenceClassification, BertTokenizer, pipeline
 
-from src.model import NUM_LABELS
+from factcheck.model import NUM_LABELS
 
 logger = logging.getLogger(__name__)
 

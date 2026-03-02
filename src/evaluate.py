@@ -15,7 +15,7 @@ from collections import Counter
 
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 
-from src.fact_checker import FactChecker
+from factcheck.fact_checker import FactChecker
 
 logging.basicConfig(
     level=logging.WARNING,
